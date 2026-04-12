@@ -38,7 +38,6 @@ export default function Dashboard() {
     navigate('/login')
   }
 
-  // Stats
   const totalRevenue = invoices
     .filter(i => i.status === 'paid')
     .reduce((sum, i) => sum + parseFloat(i.total), 0)
@@ -50,7 +49,6 @@ export default function Dashboard() {
   const totalOverdue = invoices.filter(i => i.status === 'overdue').length
   const totalClients = clients.length
 
-  // Chart data — last 6 months
   const chartData = () => {
     const months = []
     for (let i = 5; i >= 0; i--) {
@@ -85,9 +83,9 @@ export default function Dashboard() {
       {/* Navbar */}
       <nav className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-8">
-          <h1 className="text-2xl font-bold text-blue-600">Invoxa</h1>
+          <Link to="/" className="text-2xl font-bold text-blue-600">Invoxa</Link>
           <div className="flex gap-6 text-sm font-medium text-gray-600">
-            <Link to="/" className="text-blue-600">Dashboard</Link>
+            <Link to="/dashboard" className="text-blue-600">Dashboard</Link>
             <Link to="/clients" className="hover:text-blue-600">Clients</Link>
             <Link to="/invoices" className="hover:text-blue-600">Invoices</Link>
           </div>
@@ -105,7 +103,6 @@ export default function Dashboard() {
 
       <div className="max-w-6xl mx-auto px-6 py-8">
 
-        {/* Header */}
         <div className="mb-8">
           <h2 className="text-2xl font-bold text-gray-800">
             Welcome back, {user.name} 👋
@@ -174,10 +171,7 @@ export default function Dashboard() {
             <div className="bg-white rounded-2xl shadow-sm p-6 border border-gray-100">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-semibold text-gray-700">Recent Invoices</h3>
-                <Link
-                  to="/invoices"
-                  className="text-sm text-blue-600 hover:underline"
-                >
+                <Link to="/invoices" className="text-sm text-blue-600 hover:underline">
                   View all
                 </Link>
               </div>

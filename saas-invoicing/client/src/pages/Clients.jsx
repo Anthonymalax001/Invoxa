@@ -84,9 +84,9 @@ export default function Clients() {
       {/* Navbar */}
       <nav className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-8">
-          <h1 className="text-2xl font-bold text-blue-600">Invoxa</h1>
+          <Link to="/" className="text-2xl font-bold text-blue-600">Invoxa</Link>
           <div className="flex gap-6 text-sm font-medium text-gray-600">
-            <Link to="/" className="hover:text-blue-600">Dashboard</Link>
+            <Link to="/dashboard" className="hover:text-blue-600">Dashboard</Link>
             <Link to="/clients" className="text-blue-600">Clients</Link>
             <Link to="/invoices" className="hover:text-blue-600">Invoices</Link>
           </div>
@@ -146,7 +146,12 @@ export default function Clients() {
                 {clients.map((client) => (
                   <tr key={client.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 font-medium text-gray-800">
-                      {client.name}
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-semibold text-xs">
+                          {client.name.charAt(0).toUpperCase()}
+                        </div>
+                        {client.name}
+                      </div>
                     </td>
                     <td className="px-6 py-4 text-gray-500">
                       {client.email || '—'}

@@ -21,7 +21,7 @@ export default function Login() {
       localStorage.setItem('token', res.data.token)
       localStorage.setItem('user', JSON.stringify(res.data.user))
       localStorage.setItem('tenant', JSON.stringify(res.data.tenant))
-      navigate('/')
+      navigate('/dashboard')
     } catch (err) {
       setError(err.response?.data?.error || 'Login failed. Try again.')
     } finally {
@@ -35,7 +35,9 @@ export default function Login() {
 
         {/* Logo */}
         <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-blue-600">Invoxa</h1>
+          <Link to="/" className="inline-block">
+            <h1 className="text-4xl font-bold text-blue-600">Invoxa</h1>
+          </Link>
           <p className="text-gray-500 mt-2">Sign in to your account</p>
         </div>
 
@@ -94,6 +96,12 @@ export default function Login() {
             Don't have an account?{' '}
             <Link to="/register" className="text-blue-600 font-medium hover:underline">
               Create one free
+            </Link>
+          </p>
+
+          <p className="text-center text-sm text-gray-500 mt-3">
+            <Link to="/" className="text-gray-400 hover:text-blue-600">
+              ← Back to home
             </Link>
           </p>
 

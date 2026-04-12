@@ -16,7 +16,6 @@ export default function Invoices() {
     items: [{ description: '', quantity: 1, unit_price: '' }]
   })
 
-  // M-Pesa states
   const [mpesaModal, setMpesaModal] = useState(false)
   const [mpesaInvoice, setMpesaInvoice] = useState(null)
   const [mpesaPhone, setMpesaPhone] = useState('')
@@ -179,9 +178,9 @@ export default function Invoices() {
       {/* Navbar */}
       <nav className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-8">
-          <h1 className="text-2xl font-bold text-blue-600">Invoxa</h1>
+          <Link to="/" className="text-2xl font-bold text-blue-600">Invoxa</Link>
           <div className="flex gap-6 text-sm font-medium text-gray-600">
-            <Link to="/" className="hover:text-blue-600">Dashboard</Link>
+            <Link to="/dashboard" className="hover:text-blue-600">Dashboard</Link>
             <Link to="/clients" className="hover:text-blue-600">Clients</Link>
             <Link to="/invoices" className="text-blue-600">Invoices</Link>
           </div>
