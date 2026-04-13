@@ -12,7 +12,16 @@ const paymentRoutes = require('./routes/payments')
 const app = express()
 
 app.use(helmet())
-app.use(cors({ origin: process.env.CLIENT_URL || 'http://localhost:5173' }))
+
+// ✅ UPDATED CORS (works both locally + production)
+app.use(cors({
+  origin: [
+    'http://localhost:5173', // local frontend
+    process.env.CLIENT_URL   // deployed frontend (Vercel later)
+  ],
+  credentials: true
+}))
+
 app.use(morgan('dev'))
 app.use(express.json())
 
@@ -23,6 +32,11 @@ app.use('/api/payments', paymentRoutes)
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'Server is running' })
+})
+
+// Optional (nice for testing root)
+app.get('/', (req, res) => {
+  res.send('Invoxa API is running 🚀')
 })
 
 app.use((err, req, res, next) => {

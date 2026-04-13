@@ -17,7 +17,7 @@ export default function Login() {
     setError('')
     setLoading(true)
     try {
-      const res = await api.post('/auth/login', form)
+      const res = await api.post('/api/auth/login', form)
       localStorage.setItem('token', res.data.token)
       localStorage.setItem('user', JSON.stringify(res.data.user))
       localStorage.setItem('tenant', JSON.stringify(res.data.tenant))
