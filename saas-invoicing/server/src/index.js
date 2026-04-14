@@ -16,8 +16,8 @@ app.use(helmet())
 // ✅ UPDATED CORS (works both locally + production)
 app.use(cors({
   origin: [
-    'http://localhost:5173', // local frontend
-    process.env.CLIENT_URL   // deployed frontend (Vercel later)
+    'http://localhost:5173',
+    'https://invoxa1.vercel.app'
   ],
   credentials: true
 }))
