@@ -7,12 +7,12 @@ import Clients from './pages/Clients'
 import Invoices from './pages/Invoices'
 
 const PrivateRoute = ({ children }) => {
-  const token = localStorage.getItem('token')
+  const token = sessionStorage.getItem('token') // ✅ FIX
   return token ? children : <Navigate to="/login" replace />
 }
 
 const PublicRoute = ({ children }) => {
-  const token = localStorage.getItem('token')
+  const token = sessionStorage.getItem('token') // ✅ FIX
   return !token ? children : <Navigate to="/dashboard" replace />
 }
 

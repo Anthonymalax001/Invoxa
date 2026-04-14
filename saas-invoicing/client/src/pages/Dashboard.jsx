@@ -15,6 +15,7 @@ export default function Dashboard() {
   const [clients, setClients] = useState([])
   const [loading, setLoading] = useState(true)
 
+  // Fetch data
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -30,7 +31,18 @@ export default function Dashboard() {
         setLoading(false)
       }
     }
+
     fetchData()
+  }, [])
+
+  // 🔥 FIX: remove stuck overlays globally
+  useEffect(() => {
+    document.body.style.overflow = 'auto'
+    document.body.style.pointerEvents = 'auto'
+
+    // remove any leftover modal overlays
+    const overlays = document.querySelectorAll('div.fixed.inset-0')
+    overlays.forEach(el => el.remove())
   }, [])
 
   const handleLogout = () => {
@@ -54,15 +66,22 @@ export default function Dashboard() {
     for (let i = 5; i >= 0; i--) {
       const date = new Date()
       date.setMonth(date.getMonth() - i)
+
       const label = date.toLocaleString('default', { month: 'short' })
       const month = date.getMonth()
       const year = date.getFullYear()
+
       const total = invoices
         .filter(inv => {
           const d = new Date(inv.created_at)
-          return d.getMonth() === month && d.getFullYear() === year && inv.status === 'paid'
+          return (
+            d.getMonth() === month &&
+            d.getFullYear() === year &&
+            inv.status === 'paid'
+          )
         })
         .reduce((sum, inv) => sum + parseFloat(inv.total), 0)
+
       months.push({ month: label, revenue: total })
     }
     return months
@@ -78,18 +97,22 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 relative z-10 isolate">
 
       {/* Navbar */}
       <nav className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-8">
-          <Link to="/" className="text-2xl font-bold text-blue-600">Invoxa</Link>
+          <Link to="/" className="text-2xl font-bold text-blue-600">
+            Invoxa
+          </Link>
+
           <div className="flex gap-6 text-sm font-medium text-gray-600">
             <Link to="/dashboard" className="text-blue-600">Dashboard</Link>
             <Link to="/clients" className="hover:text-blue-600">Clients</Link>
             <Link to="/invoices" className="hover:text-blue-600">Invoices</Link>
           </div>
         </div>
+
         <div className="flex items-center gap-4">
           <span className="text-sm text-gray-500">{tenant.name}</span>
           <button
@@ -101,6 +124,7 @@ export default function Dashboard() {
         </div>
       </nav>
 
+      {/* Main content */}
       <div className="max-w-6xl mx-auto px-6 py-8">
 
         <div className="mb-8">
@@ -137,13 +161,17 @@ export default function Dashboard() {
 
               <div className="bg-white rounded-2xl shadow-sm p-6 border border-gray-100">
                 <p className="text-sm text-gray-500">Overdue Invoices</p>
-                <p className="text-2xl font-bold text-red-500 mt-1">{totalOverdue}</p>
+                <p className="text-2xl font-bold text-red-500 mt-1">
+                  {totalOverdue}
+                </p>
                 <p className="text-xs text-red-400 mt-1">Needs attention</p>
               </div>
 
               <div className="bg-white rounded-2xl shadow-sm p-6 border border-gray-100">
                 <p className="text-sm text-gray-500">Total Clients</p>
-                <p className="text-2xl font-bold text-gray-800 mt-1">{totalClients}</p>
+                <p className="text-2xl font-bold text-gray-800 mt-1">
+                  {totalClients}
+                </p>
                 <p className="text-xs text-gray-400 mt-1">Active clients</p>
               </div>
 
@@ -154,13 +182,17 @@ export default function Dashboard() {
               <h3 className="text-lg font-semibold text-gray-700 mb-4">
                 Revenue — Last 6 Months
               </h3>
+
               <ResponsiveContainer width="100%" height={250}>
                 <BarChart data={chartData()}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                   <XAxis dataKey="month" tick={{ fontSize: 12 }} />
                   <YAxis tick={{ fontSize: 12 }} />
                   <Tooltip
-                    formatter={(value) => [`KES ${value.toLocaleString()}`, 'Revenue']}
+                    formatter={(value) => [
+                      `KES ${Number(value).toLocaleString()}`,
+                      'Revenue'
+                    ]}
                   />
                   <Bar dataKey="revenue" fill="#2563eb" radius={[6, 6, 0, 0]} />
                 </BarChart>
@@ -170,7 +202,9 @@ export default function Dashboard() {
             {/* Recent Invoices */}
             <div className="bg-white rounded-2xl shadow-sm p-6 border border-gray-100">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-gray-700">Recent Invoices</h3>
+                <h3 className="text-lg font-semibold text-gray-700">
+                  Recent Invoices
+                </h3>
                 <Link to="/invoices" className="text-sm text-blue-600 hover:underline">
                   View all
                 </Link>
@@ -180,12 +214,6 @@ export default function Dashboard() {
                 <div className="text-center py-10 text-gray-400">
                   <p className="text-4xl mb-2">📄</p>
                   <p>No invoices yet.</p>
-                  <Link
-                    to="/invoices"
-                    className="mt-3 inline-block text-sm text-blue-600 hover:underline"
-                  >
-                    Create your first invoice
-                  </Link>
                 </div>
               ) : (
                 <div className="overflow-x-auto">
@@ -199,22 +227,21 @@ export default function Dashboard() {
                         <th className="pb-3 font-medium">Date</th>
                       </tr>
                     </thead>
+
                     <tbody className="divide-y divide-gray-50">
                       {invoices.slice(0, 5).map((inv) => (
-                        <tr key={inv.id} className="hover:bg-gray-50">
-                          <td className="py-3 font-medium text-gray-700">
-                            {inv.invoice_number}
-                          </td>
-                          <td className="py-3 text-gray-600">{inv.client_name}</td>
-                          <td className="py-3 text-gray-800 font-medium">
+                        <tr key={inv.id}>
+                          <td className="py-3">{inv.invoice_number}</td>
+                          <td className="py-3">{inv.client_name}</td>
+                          <td className="py-3">
                             KES {parseFloat(inv.total).toLocaleString()}
                           </td>
                           <td className="py-3">
-                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusColor(inv.status)}`}>
+                            <span className={`px-2 py-1 rounded-full text-xs ${statusColor(inv.status)}`}>
                               {inv.status}
                             </span>
                           </td>
-                          <td className="py-3 text-gray-400">
+                          <td className="py-3">
                             {new Date(inv.created_at).toLocaleDateString()}
                           </td>
                         </tr>
@@ -224,6 +251,7 @@ export default function Dashboard() {
                 </div>
               )}
             </div>
+
           </>
         )}
       </div>
