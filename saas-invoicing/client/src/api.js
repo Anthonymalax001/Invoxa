@@ -3,7 +3,7 @@ import axios from 'axios'
 const baseURL =
   window.location.hostname === 'localhost'
     ? 'http://localhost:5000/api'
-    : 'https://invoxa-54f0.onrender.com/api'
+    : 'calm-spontaneity-production-f15e.up.railway.app/api'
 
 const api = axios.create({
   baseURL,
