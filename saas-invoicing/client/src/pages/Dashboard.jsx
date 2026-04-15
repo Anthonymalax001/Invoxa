@@ -8,14 +8,15 @@ import {
 
 export default function Dashboard() {
   const navigate = useNavigate()
-  const user = JSON.parse(localStorage.getItem('user') || '{}')
-  const tenant = JSON.parse(localStorage.getItem('tenant') || '{}')
+
+  // ✅ FIX: use sessionStorage instead of localStorage
+  const user = JSON.parse(sessionStorage.getItem('user') || '{}')
+  const tenant = JSON.parse(sessionStorage.getItem('tenant') || '{}')
 
   const [invoices, setInvoices] = useState([])
   const [clients, setClients] = useState([])
   const [loading, setLoading] = useState(true)
 
-  // Fetch data
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -31,22 +32,17 @@ export default function Dashboard() {
         setLoading(false)
       }
     }
-
     fetchData()
   }, [])
 
-  // 🔥 FIX: remove stuck overlays globally
+  // remove stuck overlays
   useEffect(() => {
     document.body.style.overflow = 'auto'
     document.body.style.pointerEvents = 'auto'
-
-    // remove any leftover modal overlays
-    const overlays = document.querySelectorAll('div.fixed.inset-0')
-    overlays.forEach(el => el.remove())
   }, [])
 
   const handleLogout = () => {
-    localStorage.clear()
+    sessionStorage.clear() // ✅ FIX
     navigate('/login')
   }
 
@@ -97,41 +93,47 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 relative z-10 isolate">
+    <div className="min-h-screen bg-gray-50">
 
       {/* Navbar */}
-      <nav className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-8">
-          <Link to="/" className="text-2xl font-bold text-blue-600">
+      <nav className="bg-white border-b border-gray-200 px-4 sm:px-6 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        
+        <div className="flex items-center justify-between w-full sm:w-auto">
+          <Link to="/" className="text-xl sm:text-2xl font-bold text-blue-600">
             Invoxa
           </Link>
-
-          <div className="flex gap-6 text-sm font-medium text-gray-600">
-            <Link to="/dashboard" className="text-blue-600">Dashboard</Link>
-            <Link to="/clients" className="hover:text-blue-600">Clients</Link>
-            <Link to="/invoices" className="hover:text-blue-600">Invoices</Link>
-          </div>
         </div>
 
-        <div className="flex items-center gap-4">
-          <span className="text-sm text-gray-500">{tenant.name}</span>
+        <div className="flex flex-wrap gap-4 text-sm font-medium text-gray-600">
+          <Link to="/dashboard" className="text-blue-600">Dashboard</Link>
+          <Link to="/clients" className="hover:text-blue-600">Clients</Link>
+          <Link to="/invoices" className="hover:text-blue-600">Invoices</Link>
+        </div>
+
+        {/* ✅ FIX: fallback text */}
+        <div className="flex items-center justify-between sm:justify-end gap-4">
+          <span className="text-xs sm:text-sm text-gray-500 truncate max-w-[120px] sm:max-w-none">
+            {tenant?.name || 'Business'}
+          </span>
           <button
             onClick={handleLogout}
-            className="text-sm text-red-500 hover:underline"
+            className="text-xs sm:text-sm text-red-500 hover:underline"
           >
             Logout
           </button>
         </div>
+
       </nav>
 
-      {/* Main content */}
-      <div className="max-w-6xl mx-auto px-6 py-8">
+      {/* Main */}
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
 
-        <div className="mb-8">
-          <h2 className="text-2xl font-bold text-gray-800">
-            Welcome back, {user.name} 👋
+        <div className="mb-6 sm:mb-8">
+          <h2 className="text-xl sm:text-2xl font-bold text-gray-800">
+            {/* ✅ FIX: fallback name */}
+            Welcome back, {user?.name || 'User'} 👋
           </h2>
-          <p className="text-gray-500 mt-1">
+          <p className="text-gray-500 mt-1 text-sm sm:text-base">
             Here's what's happening with your business today.
           </p>
         </div>
@@ -140,116 +142,96 @@ export default function Dashboard() {
           <div className="text-center py-20 text-gray-400">Loading...</div>
         ) : (
           <>
-            {/* Stat Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            {/* Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-6 sm:mb-8">
 
-              <div className="bg-white rounded-2xl shadow-sm p-6 border border-gray-100">
-                <p className="text-sm text-gray-500">Total Revenue</p>
-                <p className="text-2xl font-bold text-gray-800 mt-1">
+              <div className="bg-white rounded-xl sm:rounded-2xl shadow-sm p-4 sm:p-6 border">
+                <p className="text-xs sm:text-sm text-gray-500">Total Revenue</p>
+                <p className="text-xl sm:text-2xl font-bold mt-1">
                   KES {totalRevenue.toLocaleString()}
                 </p>
-                <p className="text-xs text-green-600 mt-1">From paid invoices</p>
               </div>
 
-              <div className="bg-white rounded-2xl shadow-sm p-6 border border-gray-100">
-                <p className="text-sm text-gray-500">Pending Payment</p>
-                <p className="text-2xl font-bold text-gray-800 mt-1">
+              <div className="bg-white rounded-xl sm:rounded-2xl shadow-sm p-4 sm:p-6 border">
+                <p className="text-xs sm:text-sm text-gray-500">Pending</p>
+                <p className="text-xl sm:text-2xl font-bold mt-1">
                   KES {totalPending.toLocaleString()}
                 </p>
-                <p className="text-xs text-blue-600 mt-1">Awaiting payment</p>
               </div>
 
-              <div className="bg-white rounded-2xl shadow-sm p-6 border border-gray-100">
-                <p className="text-sm text-gray-500">Overdue Invoices</p>
-                <p className="text-2xl font-bold text-red-500 mt-1">
+              <div className="bg-white rounded-xl sm:rounded-2xl shadow-sm p-4 sm:p-6 border">
+                <p className="text-xs sm:text-sm text-gray-500">Overdue</p>
+                <p className="text-xl sm:text-2xl font-bold text-red-500 mt-1">
                   {totalOverdue}
                 </p>
-                <p className="text-xs text-red-400 mt-1">Needs attention</p>
               </div>
 
-              <div className="bg-white rounded-2xl shadow-sm p-6 border border-gray-100">
-                <p className="text-sm text-gray-500">Total Clients</p>
-                <p className="text-2xl font-bold text-gray-800 mt-1">
+              <div className="bg-white rounded-xl sm:rounded-2xl shadow-sm p-4 sm:p-6 border">
+                <p className="text-xs sm:text-sm text-gray-500">Clients</p>
+                <p className="text-xl sm:text-2xl font-bold mt-1">
                   {totalClients}
                 </p>
-                <p className="text-xs text-gray-400 mt-1">Active clients</p>
               </div>
 
             </div>
 
             {/* Chart */}
-            <div className="bg-white rounded-2xl shadow-sm p-6 border border-gray-100 mb-8">
-              <h3 className="text-lg font-semibold text-gray-700 mb-4">
+            <div className="bg-white rounded-xl sm:rounded-2xl shadow-sm p-4 sm:p-6 mb-6 sm:mb-8">
+              <h3 className="text-base sm:text-lg font-semibold mb-4">
                 Revenue — Last 6 Months
               </h3>
 
               <ResponsiveContainer width="100%" height={250}>
                 <BarChart data={chartData()}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                  <XAxis dataKey="month" tick={{ fontSize: 12 }} />
-                  <YAxis tick={{ fontSize: 12 }} />
-                  <Tooltip
-                    formatter={(value) => [
-                      `KES ${Number(value).toLocaleString()}`,
-                      'Revenue'
-                    ]}
-                  />
-                  <Bar dataKey="revenue" fill="#2563eb" radius={[6, 6, 0, 0]} />
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="month" />
+                  <YAxis />
+                  <Tooltip />
+                  <Bar dataKey="revenue" fill="#2563eb" />
                 </BarChart>
               </ResponsiveContainer>
             </div>
 
-            {/* Recent Invoices */}
-            <div className="bg-white rounded-2xl shadow-sm p-6 border border-gray-100">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-gray-700">
+            {/* Table */}
+            <div className="bg-white rounded-xl sm:rounded-2xl shadow-sm p-4 sm:p-6">
+              <div className="flex justify-between mb-4">
+                <h3 className="text-base sm:text-lg font-semibold">
                   Recent Invoices
                 </h3>
-                <Link to="/invoices" className="text-sm text-blue-600 hover:underline">
+                <Link to="/invoices" className="text-sm text-blue-600">
                   View all
                 </Link>
               </div>
 
-              {invoices.length === 0 ? (
-                <div className="text-center py-10 text-gray-400">
-                  <p className="text-4xl mb-2">📄</p>
-                  <p>No invoices yet.</p>
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="text-left text-gray-400 border-b border-gray-100">
-                        <th className="pb-3 font-medium">Invoice</th>
-                        <th className="pb-3 font-medium">Client</th>
-                        <th className="pb-3 font-medium">Amount</th>
-                        <th className="pb-3 font-medium">Status</th>
-                        <th className="pb-3 font-medium">Date</th>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm min-w-[600px]">
+                  <thead>
+                    <tr className="text-left text-gray-400">
+                      <th>Invoice</th>
+                      <th>Client</th>
+                      <th>Amount</th>
+                      <th>Status</th>
+                      <th>Date</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {invoices.slice(0, 5).map((inv) => (
+                      <tr key={inv.id}>
+                        <td>{inv.invoice_number}</td>
+                        <td>{inv.client_name}</td>
+                        <td>KES {parseFloat(inv.total).toLocaleString()}</td>
+                        <td>
+                          <span className={`px-2 py-1 text-xs rounded ${statusColor(inv.status)}`}>
+                            {inv.status}
+                          </span>
+                        </td>
+                        <td>{new Date(inv.created_at).toLocaleDateString()}</td>
                       </tr>
-                    </thead>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
 
-                    <tbody className="divide-y divide-gray-50">
-                      {invoices.slice(0, 5).map((inv) => (
-                        <tr key={inv.id}>
-                          <td className="py-3">{inv.invoice_number}</td>
-                          <td className="py-3">{inv.client_name}</td>
-                          <td className="py-3">
-                            KES {parseFloat(inv.total).toLocaleString()}
-                          </td>
-                          <td className="py-3">
-                            <span className={`px-2 py-1 rounded-full text-xs ${statusColor(inv.status)}`}>
-                              {inv.status}
-                            </span>
-                          </td>
-                          <td className="py-3">
-                            {new Date(inv.created_at).toLocaleDateString()}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
             </div>
 
           </>

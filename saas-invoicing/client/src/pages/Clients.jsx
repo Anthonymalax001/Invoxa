@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import api from '../api'
 
 export default function Clients() {
+  const navigate = useNavigate()
+
   const [clients, setClients] = useState([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
@@ -45,13 +47,26 @@ export default function Clients() {
     setShowModal(true)
   }
 
+  // ✅ PHONE VALIDATION (strict 10 digits)
   const handleChange = (e) => {
-    setForm({ ...form, [e.target.name]: e.target.value })
+    const { name, value } = e.target
+
+    if (name === 'phone') {
+      const numbersOnly = value.replace(/\D/g, '').slice(0, 10)
+      setForm({ ...form, phone: numbersOnly })
+    } else {
+      setForm({ ...form, [name]: value })
+    }
   }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
     setError('')
+
+    if (form.phone && form.phone.length !== 10) {
+      return setError('Phone number must be exactly 10 digits')
+    }
+
     setSaving(true)
     try {
       if (editing) {
@@ -78,52 +93,63 @@ export default function Clients() {
     }
   }
 
+  // ✅ FIX logout (sessionStorage, not localStorage)
+  const handleLogout = () => {
+    sessionStorage.clear()
+    navigate('/login')
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
 
       {/* Navbar */}
-      <nav className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-8">
-          <Link to="/" className="text-2xl font-bold text-blue-600">Invoxa</Link>
-          <div className="flex gap-6 text-sm font-medium text-gray-600">
-            <Link to="/dashboard" className="hover:text-blue-600">Dashboard</Link>
-            <Link to="/clients" className="text-blue-600">Clients</Link>
-            <Link to="/invoices" className="hover:text-blue-600">Invoices</Link>
-          </div>
+      <nav className="bg-white border-b border-gray-200 px-4 sm:px-6 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        
+        <div className="flex items-center justify-between w-full sm:w-auto">
+          <Link to="/" className="text-xl sm:text-2xl font-bold text-blue-600">
+            Invoxa
+          </Link>
         </div>
+
+        <div className="flex gap-4 text-sm font-medium text-gray-600">
+          <Link to="/dashboard" className="hover:text-blue-600">Dashboard</Link>
+          <Link to="/clients" className="text-blue-600">Clients</Link>
+          <Link to="/invoices" className="hover:text-blue-600">Invoices</Link>
+        </div>
+
         <button
-          onClick={() => { localStorage.clear(); window.location.href = '/login' }}
-          className="text-sm text-red-500 hover:underline"
+          onClick={handleLogout}
+          className="text-sm text-red-500 hover:underline self-start sm:self-auto"
         >
           Logout
         </button>
       </nav>
 
-      <div className="max-w-5xl mx-auto px-6 py-8">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
 
         {/* Header */}
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
           <div>
-            <h2 className="text-2xl font-bold text-gray-800">Clients</h2>
+            <h2 className="text-xl sm:text-2xl font-bold text-gray-800">Clients</h2>
             <p className="text-gray-500 text-sm mt-1">Manage your business clients</p>
           </div>
+
           <button
             onClick={openCreate}
-            className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-5 py-2.5 rounded-lg transition"
+            className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-5 py-2.5 rounded-lg transition w-full sm:w-auto"
           >
             + Add Client
           </button>
         </div>
 
         {/* Table */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-x-auto">
           {loading ? (
             <div className="text-center py-20 text-gray-400">Loading...</div>
           ) : clients.length === 0 ? (
             <div className="text-center py-20 text-gray-400">
               <p className="text-4xl mb-3">👥</p>
               <p className="font-medium">No clients yet</p>
-              <p className="text-sm mt-1">Add your first client to get started</p>
               <button
                 onClick={openCreate}
                 className="mt-4 text-sm text-blue-600 hover:underline"
@@ -132,51 +158,39 @@ export default function Clients() {
               </button>
             </div>
           ) : (
-            <table className="w-full text-sm">
+            <table className="w-full text-sm min-w-[600px]">
               <thead className="bg-gray-50 border-b border-gray-100">
                 <tr className="text-left text-gray-400">
-                  <th className="px-6 py-4 font-medium">Name</th>
-                  <th className="px-6 py-4 font-medium">Email</th>
-                  <th className="px-6 py-4 font-medium">Phone</th>
-                  <th className="px-6 py-4 font-medium">Address</th>
-                  <th className="px-6 py-4 font-medium">Actions</th>
+                  <th className="px-4 sm:px-6 py-4">Name</th>
+                  <th className="px-4 sm:px-6 py-4">Email</th>
+                  <th className="px-4 sm:px-6 py-4">Phone</th>
+                  <th className="px-4 sm:px-6 py-4">Address</th>
+                  <th className="px-4 sm:px-6 py-4">Actions</th>
                 </tr>
               </thead>
+
               <tbody className="divide-y divide-gray-50">
                 {clients.map((client) => (
                   <tr key={client.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 font-medium text-gray-800">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-semibold text-xs">
-                          {client.name.charAt(0).toUpperCase()}
-                        </div>
-                        {client.name}
-                      </div>
+                    <td className="px-4 sm:px-6 py-4 font-medium text-gray-800">
+                      {client.name}
                     </td>
-                    <td className="px-6 py-4 text-gray-500">
+                    <td className="px-4 sm:px-6 py-4 text-gray-500">
                       {client.email || '—'}
                     </td>
-                    <td className="px-6 py-4 text-gray-500">
+                    <td className="px-4 sm:px-6 py-4 text-gray-500">
                       {client.phone || '—'}
                     </td>
-                    <td className="px-6 py-4 text-gray-500">
+                    <td className="px-4 sm:px-6 py-4 text-gray-500">
                       {client.address || '—'}
                     </td>
-                    <td className="px-6 py-4">
-                      <div className="flex gap-3">
-                        <button
-                          onClick={() => openEdit(client)}
-                          className="text-blue-600 hover:underline text-xs font-medium"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          onClick={() => handleDelete(client.id)}
-                          className="text-red-500 hover:underline text-xs font-medium"
-                        >
-                          Delete
-                        </button>
-                      </div>
+                    <td className="px-4 sm:px-6 py-4">
+                      <button onClick={() => openEdit(client)} className="text-blue-600 text-xs mr-3">
+                        Edit
+                      </button>
+                      <button onClick={() => handleDelete(client.id)} className="text-red-500 text-xs">
+                        Delete
+                      </button>
                     </td>
                   </tr>
                 ))}
@@ -191,97 +205,38 @@ export default function Clients() {
         <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50 px-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
 
-            <div className="flex items-center justify-between mb-5">
-              <h3 className="text-lg font-semibold text-gray-800">
-                {editing ? 'Edit Client' : 'Add New Client'}
-              </h3>
-              <button
-                onClick={() => setShowModal(false)}
-                className="text-gray-400 hover:text-gray-600 text-xl"
-              >
-                ✕
-              </button>
-            </div>
+            <h3 className="text-lg font-semibold mb-4">
+              {editing ? 'Edit Client' : 'Add Client'}
+            </h3>
 
             {error && (
-              <div className="mb-4 bg-red-50 border border-red-200 text-red-600 text-sm rounded-lg px-4 py-3">
-                {error}
-              </div>
+              <div className="mb-3 text-red-500 text-sm">{error}</div>
             )}
 
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-3">
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Full name *
-                </label>
-                <input
-                  type="text"
-                  name="name"
-                  value={form.name}
-                  onChange={handleChange}
-                  required
-                  placeholder="e.g. John Kamau"
-                  className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
+              <input name="name" value={form.name} onChange={handleChange} placeholder="Name" required className="w-full border p-2 rounded" />
+              <input name="email" value={form.email} onChange={handleChange} placeholder="Email" className="w-full border p-2 rounded" />
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Email
-                </label>
-                <input
-                  type="email"
-                  name="email"
-                  value={form.email}
-                  onChange={handleChange}
-                  placeholder="john@example.com"
-                  className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
+              <input
+                type="tel"
+                name="phone"
+                value={form.phone}
+                onChange={handleChange}
+                placeholder="0712345678"
+                maxLength={10}
+                inputMode="numeric"
+                className="w-full border p-2 rounded"
+              />
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Phone
-                </label>
-                <input
-                  type="tel"
-                  name="phone"
-                  value={form.phone}
-                  onChange={handleChange}
-                  placeholder="e.g. 0712345678"
-                  className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
+              <input name="address" value={form.address} onChange={handleChange} placeholder="Address" className="w-full border p-2 rounded" />
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Address
-                </label>
-                <textarea
-                  name="address"
-                  value={form.address}
-                  onChange={handleChange}
-                  placeholder="e.g. Nairobi, Kenya"
-                  rows={2}
-                  className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-                />
-              </div>
-
-              <div className="flex gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowModal(false)}
-                  className="flex-1 border border-gray-300 text-gray-600 text-sm font-medium py-2.5 rounded-lg hover:bg-gray-50 transition"
-                >
+              <div className="flex gap-2">
+                <button type="button" onClick={() => setShowModal(false)} className="flex-1 border p-2 rounded">
                   Cancel
                 </button>
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold py-2.5 rounded-lg transition disabled:opacity-50"
-                >
-                  {saving ? 'Saving...' : editing ? 'Save Changes' : 'Add Client'}
+                <button type="submit" className="flex-1 bg-blue-600 text-white p-2 rounded">
+                  {saving ? 'Saving...' : 'Save'}
                 </button>
               </div>
 
@@ -289,7 +244,6 @@ export default function Clients() {
           </div>
         </div>
       )}
-
     </div>
   )
 }

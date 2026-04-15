@@ -14,30 +14,72 @@ router.post('/register', async (req, res) => {
     return res.status(400).json({ error: 'All fields are required' })
   }
 
+  // ✅ PHONE VALIDATION (NEW - SAFE)
+  let cleanedPhone = null
+  if (phone) {
+    cleanedPhone = phone.replace(/\D/g, '')
+
+    if (cleanedPhone.length !== 10) {
+      return res.status(400).json({
+        error: 'Phone number must be exactly 10 digits'
+      })
+    }
+
+    if (!cleanedPhone.startsWith('07') && !cleanedPhone.startsWith('01')) {
+      return res.status(400).json({
+        error: 'Phone must start with 07 or 01'
+      })
+    }
+  }
+
   const client = await pool.connect()
 
   try {
     await client.query('BEGIN')
 
+    // ✅ CHECK EMAIL EXISTS (already there)
     const exists = await client.query(
-      'SELECT id FROM users WHERE email = $1', [email]
+      'SELECT id FROM users WHERE email = $1',
+      [email]
     )
+
     if (exists.rows.length > 0) {
       return res.status(400).json({ error: 'Email already registered' })
     }
 
+    // ✅ CHECK PHONE EXISTS (NEW)
+    if (cleanedPhone) {
+      const phoneExists = await client.query(
+        'SELECT id FROM tenants WHERE phone = $1',
+        [cleanedPhone]
+      )
+
+      if (phoneExists.rows.length > 0) {
+        return res.status(400).json({ error: 'Phone already registered' })
+      }
+    }
+
+    // ✅ CREATE TENANT (UPDATED to use cleanedPhone)
     const tenantResult = await client.query(
-      `INSERT INTO tenants (name, email, phone) VALUES ($1, $2, $3) RETURNING id`,
-      [businessName, email, phone || null]
+      `INSERT INTO tenants (name, email, phone)
+       VALUES ($1, $2, $3)
+       RETURNING id`,
+      [businessName, email, cleanedPhone]
     )
+
     const tenantId = tenantResult.rows[0].id
 
+    // ✅ HASH PASSWORD
     const passwordHash = await bcrypt.hash(password, 12)
+
+    // ✅ CREATE USER (UNCHANGED)
     const userResult = await client.query(
       `INSERT INTO users (tenant_id, name, email, password_hash, role)
-       VALUES ($1, $2, $3, $4, 'admin') RETURNING id, name, email, role`,
+       VALUES ($1, $2, $3, $4, 'admin')
+       RETURNING id, name, email, role`,
       [tenantId, businessName, email, passwordHash]
     )
+
     const user = userResult.rows[0]
 
     await client.query('COMMIT')
@@ -51,7 +93,12 @@ router.post('/register', async (req, res) => {
     res.status(201).json({
       message: 'Account created successfully',
       token,
-      user: { id: user.id, name: user.name, email: user.email, role: user.role },
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role
+      },
       tenant: { id: tenantId, name: businessName }
     })
 
@@ -76,7 +123,8 @@ router.post('/login', async (req, res) => {
     const result = await pool.query(
       `SELECT u.id, u.name, u.email, u.password_hash, u.role, u.tenant_id,
               t.name AS business_name
-       FROM users u JOIN tenants t ON u.tenant_id = t.id
+       FROM users u
+       JOIN tenants t ON u.tenant_id = t.id
        WHERE u.email = $1`,
       [email]
     )
@@ -93,15 +141,28 @@ router.post('/login', async (req, res) => {
     }
 
     const token = jwt.sign(
-      { userId: user.id, tenantId: user.tenant_id, email: user.email, role: user.role },
+      {
+        userId: user.id,
+        tenantId: user.tenant_id,
+        email: user.email,
+        role: user.role
+      },
       process.env.JWT_SECRET,
       { expiresIn: process.env.JWT_EXPIRES_IN }
     )
 
     res.json({
       token,
-      user: { id: user.id, name: user.name, email: user.email, role: user.role },
-      tenant: { id: user.tenant_id, name: user.business_name }
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role
+      },
+      tenant: {
+        id: user.tenant_id,
+        name: user.business_name
+      }
     })
 
   } catch (err) {

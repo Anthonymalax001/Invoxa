@@ -26,10 +26,14 @@ export default function Login() {
     try {
       const res = await api.post('/auth/login', form)
 
-      // ✅ FIX: use sessionStorage instead
+      // ✅ Store in BOTH (prevents api.js issues)
       sessionStorage.setItem('token', res.data.token)
       sessionStorage.setItem('user', JSON.stringify(res.data.user))
       sessionStorage.setItem('tenant', JSON.stringify(res.data.tenant))
+
+      localStorage.setItem('token', res.data.token) // 🔥 important for axios
+      localStorage.setItem('user', JSON.stringify(res.data.user))
+      localStorage.setItem('tenant', JSON.stringify(res.data.tenant))
 
       navigate('/dashboard')
 
@@ -79,7 +83,7 @@ export default function Login() {
               />
             </div>
 
-            {/* Password with toggle */}
+            {/* Password */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Password

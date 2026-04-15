@@ -7,11 +7,12 @@ const baseURL =
 
 const api = axios.create({
   baseURL,
-  withCredentials: true
+  withCredentials: true,
+  timeout: 10000 // ✅ prevents hanging requests
 })
 
 api.interceptors.request.use((config) => {
-  // ✅ FIX: sessionStorage instead of localStorage
+  // ✅ use sessionStorage
   const token = sessionStorage.getItem('token')
 
   if (token) {
@@ -24,11 +25,17 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
+    // ✅ handle expired token
     if (error.response?.status === 401) {
-      // ✅ FIX: only clear session storage
       sessionStorage.clear()
       window.location.href = '/login'
     }
+
+    // ✅ handle backend down (Render/Railway cold start)
+    if (!error.response) {
+      console.error('Server unreachable')
+    }
+
     return Promise.reject(error)
   }
 )
