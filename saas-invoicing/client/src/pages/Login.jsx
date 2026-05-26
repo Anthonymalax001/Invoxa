@@ -26,12 +26,12 @@ export default function Login() {
     try {
       const res = await api.post('/auth/login', form)
 
-      // ✅ Store in BOTH (prevents api.js issues)
+      
       sessionStorage.setItem('token', res.data.token)
       sessionStorage.setItem('user', JSON.stringify(res.data.user))
       sessionStorage.setItem('tenant', JSON.stringify(res.data.tenant))
 
-      localStorage.setItem('token', res.data.token) // 🔥 important for axios
+      localStorage.setItem('token', res.data.token)
       localStorage.setItem('user', JSON.stringify(res.data.user))
       localStorage.setItem('tenant', JSON.stringify(res.data.tenant))
 
@@ -104,7 +104,7 @@ export default function Login() {
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-3 top-2.5 cursor-pointer text-gray-400 text-sm"
                 >
-                  {showPassword ? '🙈' : '👁️'}
+                  {showPassword ? 'Hide' : 'Show'}
                 </span>
               </div>
             </div>

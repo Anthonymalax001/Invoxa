@@ -3,7 +3,7 @@ import axios from 'axios'
 const baseURL =
   window.location.hostname === 'localhost'
     ? 'http://localhost:5000/api'
-    : 'https://calm-spontaneity-production-f15e.up.railway.app/api' 
+    : 'https://invoxa-1.onrender.com/api' 
 
 const api = axios.create({
   baseURL,
@@ -24,13 +24,13 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    // 🔒 Auto logout if token expired
+    
     if (error.response?.status === 401) {
       sessionStorage.clear()
       window.location.href = '/login'
     }
 
-    // 🌐 Backend unreachable (Railway cold start / network issue)
+    
     if (!error.response) {
       console.error('Server unreachable')
     }

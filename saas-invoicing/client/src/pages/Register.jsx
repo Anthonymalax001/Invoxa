@@ -70,7 +70,7 @@ export default function Register() {
 
           {success ? (
             <div className="text-center py-6">
-              <div className="text-5xl mb-4">🎉</div>
+              <div className="text-5xl mb-4"></div>
               <h3 className="text-lg font-semibold text-gray-800 mb-2">
                 Account created successfully!
               </h3>
@@ -158,7 +158,7 @@ export default function Register() {
                       onClick={() => setShowPassword(!showPassword)}
                       className="absolute right-3 top-2.5 cursor-pointer text-gray-400 text-sm"
                     >
-                      {showPassword ? '🙈' : '👁️'}
+                      {showPassword ? 'Hide' : 'Show'}
                     </span>
                   </div>
                 </div>
