@@ -73,19 +73,19 @@ export default function Landing() {
           {/* Feature pills */}
           <div className="flex items-center justify-center gap-3 flex-wrap">
             <span className="bg-gray-800 border border-gray-700 text-gray-400 text-xs font-medium px-4 py-2 rounded-full">
-              📄 Professional Invoices
+               Professional Invoices
             </span>
             <span className="bg-gray-800 border border-gray-700 text-gray-400 text-xs font-medium px-4 py-2 rounded-full">
-              📱 M-Pesa STK Push
+               M-Pesa STK Push
             </span>
             <span className="bg-gray-800 border border-gray-700 text-gray-400 text-xs font-medium px-4 py-2 rounded-full">
-              📊 Revenue Dashboard
+               Revenue Dashboard
             </span>
             <span className="bg-gray-800 border border-gray-700 text-gray-400 text-xs font-medium px-4 py-2 rounded-full">
-              📥 PDF Export
+               PDF Export
             </span>
             <span className="bg-gray-800 border border-gray-700 text-gray-400 text-xs font-medium px-4 py-2 rounded-full">
-              🔒 Secure & Multi-Tenant
+               Secure & Multi-Tenant
             </span>
           </div>
 

@@ -9,7 +9,7 @@ import {
 export default function Dashboard() {
   const navigate = useNavigate()
 
-  // ✅ FIX: use sessionStorage instead of localStorage
+  
   const user = JSON.parse(sessionStorage.getItem('user') || '{}')
   const tenant = JSON.parse(sessionStorage.getItem('tenant') || '{}')
 
@@ -35,14 +35,14 @@ export default function Dashboard() {
     fetchData()
   }, [])
 
-  // remove stuck overlays
+  
   useEffect(() => {
     document.body.style.overflow = 'auto'
     document.body.style.pointerEvents = 'auto'
   }, [])
 
   const handleLogout = () => {
-    sessionStorage.clear() // ✅ FIX
+    sessionStorage.clear() 
     navigate('/login')
   }
 
@@ -131,7 +131,7 @@ export default function Dashboard() {
         <div className="mb-6 sm:mb-8">
           <h2 className="text-xl sm:text-2xl font-bold text-gray-800">
             {/* ✅ FIX: fallback name */}
-            Welcome back, {user?.name || 'User'} 👋
+            Welcome back, {user?.name || 'User'} 
           </h2>
           <p className="text-gray-500 mt-1 text-sm sm:text-base">
             Here's what's happening with your business today.

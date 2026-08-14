@@ -47,7 +47,7 @@ export default function Clients() {
     setShowModal(true)
   }
 
-  // ✅ PHONE VALIDATION (strict 10 digits)
+  
   const handleChange = (e) => {
     const { name, value } = e.target
 
@@ -93,7 +93,7 @@ export default function Clients() {
     }
   }
 
-  // ✅ FIX logout (sessionStorage, not localStorage)
+  
   const handleLogout = () => {
     sessionStorage.clear()
     navigate('/login')

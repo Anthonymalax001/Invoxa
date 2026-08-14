@@ -32,7 +32,7 @@ export default function App() {
       timeout = setTimeout(logout, 15 * 60 * 1000) // ⏱ 15 minutes inactivity
     }
 
-    // 👇 Track user activity
+    
     window.addEventListener('mousemove', resetTimer)
     window.addEventListener('keydown', resetTimer)
     window.addEventListener('click', resetTimer)
