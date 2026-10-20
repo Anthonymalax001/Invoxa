@@ -6,6 +6,11 @@ import Register from './pages/Register'
 import Dashboard from './pages/Dashboard'
 import Clients from './pages/Clients'
 import Invoices from './pages/Invoices'
+import Products from './pages/Products'
+import Suppliers from './pages/Suppliers'
+import Purchasing from './pages/Purchasing'
+import SalesOrders from './pages/SalesOrders'
+import Expenses from './pages/Expenses'
 
 const PrivateRoute = ({ children }) => {
   const token = sessionStorage.getItem('token')
@@ -32,7 +37,6 @@ export default function App() {
       timeout = setTimeout(logout, 15 * 60 * 1000) // ⏱ 15 minutes inactivity
     }
 
-    
     window.addEventListener('mousemove', resetTimer)
     window.addEventListener('keydown', resetTimer)
     window.addEventListener('click', resetTimer)
@@ -59,6 +63,11 @@ export default function App() {
         <Route path="/dashboard" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
         <Route path="/clients" element={<PrivateRoute><Clients /></PrivateRoute>} />
         <Route path="/invoices" element={<PrivateRoute><Invoices /></PrivateRoute>} />
+        <Route path="/products" element={<PrivateRoute><Products /></PrivateRoute>} />
+        <Route path="/suppliers" element={<PrivateRoute><Suppliers /></PrivateRoute>} />
+        <Route path="/purchasing" element={<PrivateRoute><Purchasing /></PrivateRoute>} />
+        <Route path="/sales-orders" element={<PrivateRoute><SalesOrders /></PrivateRoute>} />
+        <Route path="/expenses" element={<PrivateRoute><Expenses /></PrivateRoute>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>

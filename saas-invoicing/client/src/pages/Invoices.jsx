@@ -182,6 +182,11 @@ export default function Invoices() {
           <div className="flex gap-6 text-sm font-medium text-gray-600">
             <Link to="/dashboard" className="hover:text-blue-600">Dashboard</Link>
             <Link to="/clients" className="hover:text-blue-600">Clients</Link>
+            <Link to="/products" className="hover:text-blue-600">Products</Link>
+            <Link to="/suppliers" className="hover:text-blue-600">Suppliers</Link>
+            <Link to="/purchasing" className="hover:text-blue-600">Purchasing</Link>
+            <Link to="/sales-orders" className="hover:text-blue-600">Sales Orders</Link>
+            <Link to="/expenses" className="hover:text-blue-600">Expenses</Link>
             <Link to="/invoices" className="text-blue-600">Invoices</Link>
           </div>
         </div>

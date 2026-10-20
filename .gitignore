@@ -1,0 +1,29 @@
+
+# Invoxa application dependencies
+saas-invoicing/server/node_modules/
+saas-invoicing/client/node_modules/
+
+# Environment files and secrets
+saas-invoicing/server/.env
+saas-invoicing/.env
+saas-invoicing/server/.env.*
+saas-invoicing/client/.env.*
+
+# Keep example templates
+!saas-invoicing/server/.env.example
+!saas-invoicing/client/.env.example
+
+# Frontend build output
+saas-invoicing/client/dist/
+
+# Logs and OS files
+*.log
+.DS_Store
+Thumbs.db
+
+# Production database integrity reports — never commit
+/tenant-integrity-report.txt
+/saas-invoicing/tenant-integrity-report.txt
+
+# Accidental command-output file
+/tatus --short

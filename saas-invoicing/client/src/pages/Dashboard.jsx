@@ -16,6 +16,8 @@ export default function Dashboard() {
   const [invoices, setInvoices] = useState([])
   const [clients, setClients] = useState([])
   const [loading, setLoading] = useState(true)
+  const [expenseSummary, setExpenseSummary] = useState(null)
+  const [expenseSummaryError, setExpenseSummaryError] = useState('')
 
   useEffect(() => {
     const fetchData = async () => {
@@ -26,6 +28,12 @@ export default function Dashboard() {
         ])
         setInvoices(invRes.data)
         setClients(cliRes.data)
+        try {
+          const expenseRes = await api.get('/expenses/summary', { params: { period: 'month' } })
+          setExpenseSummary(expenseRes.data)
+        } catch (expenseErr) {
+          setExpenseSummaryError(expenseErr.response?.data?.error || 'Expense summary is unavailable.')
+        }
       } catch (err) {
         console.error(err)
       } finally {
@@ -107,6 +115,11 @@ export default function Dashboard() {
         <div className="flex flex-wrap gap-4 text-sm font-medium text-gray-600">
           <Link to="/dashboard" className="text-blue-600">Dashboard</Link>
           <Link to="/clients" className="hover:text-blue-600">Clients</Link>
+          <Link to="/products" className="hover:text-blue-600">Products</Link>
+          <Link to="/suppliers" className="hover:text-blue-600">Suppliers</Link>
+          <Link to="/purchasing" className="hover:text-blue-600">Purchasing</Link>
+          <Link to="/sales-orders" className="hover:text-blue-600">Sales Orders</Link>
+          <Link to="/expenses" className="hover:text-blue-600">Expenses</Link>
           <Link to="/invoices" className="hover:text-blue-600">Invoices</Link>
         </div>
 
@@ -143,7 +156,7 @@ export default function Dashboard() {
         ) : (
           <>
             {/* Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-6 sm:mb-8">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 sm:gap-6 mb-6 sm:mb-8">
 
               <div className="bg-white rounded-xl sm:rounded-2xl shadow-sm p-4 sm:p-6 border">
                 <p className="text-xs sm:text-sm text-gray-500">Total Revenue</p>
@@ -171,6 +184,20 @@ export default function Dashboard() {
                 <p className="text-xl sm:text-2xl font-bold mt-1">
                   {totalClients}
                 </p>
+              </div>
+
+              <div className="bg-white rounded-xl sm:rounded-2xl shadow-sm p-4 sm:p-6 border">
+                <p className="text-xs sm:text-sm text-gray-500">Expenses this month (approved + paid)</p>
+                {expenseSummaryError ? (
+                  <p className="mt-2 text-sm text-amber-700">Summary unavailable</p>
+                ) : expenseSummary ? (
+                  expenseSummary.currency_totals.length ? expenseSummary.currency_totals.map((total) => (
+                    <p key={total.currency} className="mt-1 text-lg font-bold">
+                      {total.currency} {Number(total.total).toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </p>
+                  )) : <p className="mt-1 text-sm text-gray-500">No approved expenses this month</p>
+                ) : <p className="mt-1 text-sm text-gray-400">Loading…</p>}
+                <Link to="/expenses" className="mt-2 inline-block text-xs font-medium text-blue-600 hover:underline">View expenses</Link>
               </div>
 
             </div>
