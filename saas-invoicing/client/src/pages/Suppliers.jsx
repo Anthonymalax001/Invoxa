@@ -75,11 +75,17 @@ export default function Suppliers() {
 
   const submitForm = async (event) => {
     event.preventDefault()
+    const phone = form.phone.trim()
+    if (phone && !/^\d{10}$/.test(phone)) {
+      setFormError('Phone number must contain exactly 10 digits, with no letters or punctuation.')
+      return
+    }
     setSaving(true)
     setFormError('')
     try {
-      if (editing) await api.put(`/suppliers/${editing.id}`, form)
-      else await api.post('/suppliers', form)
+      const payload = { ...form, phone }
+      if (editing) await api.put(`/suppliers/${editing.id}`, payload)
+      else await api.post('/suppliers', payload)
       setFormOpen(false)
       setEditing(null)
       setReloadKey((value) => value + 1)
@@ -197,7 +203,28 @@ export default function Suppliers() {
                   <input type="email" maxLength={255} value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} className="mt-1 w-full rounded-lg border px-3 py-2.5" />
                 </label>
                 <label className="block text-sm font-medium text-gray-700">Phone
-                  <input type="tel" maxLength={50} value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} className="mt-1 w-full rounded-lg border px-3 py-2.5" />
+                  <input
+                    type="tel"
+                    inputMode="numeric"
+                    autoComplete="tel-national"
+                    maxLength={10}
+                    value={form.phone}
+                    onChange={(event) => setForm({ ...form, phone: event.target.value })}
+                    onPaste={(event) => {
+                      const pasted = event.clipboardData.getData('text').trim()
+                      if (!/^\d{10}$/.test(pasted)) {
+                        event.preventDefault()
+                        setFormError('Pasted phone number must contain exactly 10 digits, with no letters or punctuation.')
+                        return
+                      }
+                      event.preventDefault()
+                      setForm((current) => ({ ...current, phone: pasted }))
+                      setFormError('')
+                    }}
+                    aria-describedby="supplier-phone-help"
+                    className="mt-1 w-full rounded-lg border px-3 py-2.5"
+                  />
+                  <span id="supplier-phone-help" className="mt-1 block text-xs font-normal text-gray-500">Optional. Enter exactly 10 digits; leading zeroes are preserved.</span>
                 </label>
                 <label className="block text-sm font-medium text-gray-700">Address
                   <input maxLength={10000} value={form.address} onChange={(event) => setForm({ ...form, address: event.target.value })} className="mt-1 w-full rounded-lg border px-3 py-2.5" />

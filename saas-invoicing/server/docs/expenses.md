@@ -2,6 +2,7 @@
 
 ## Expense behavior
 
+- Expenses are entered manually through the Expenses page and `/api/expenses`; the API persists records in PostgreSQL `expenses` and categories in `expense_categories`. There is no bank-statement, bank-transaction or M-Pesa expense import. Expenses are not automatically created or linked from invoices or purchase orders; an optional supplier is only a payee reference.
 - New expenses are drafts. The server assigns an `EXP-####` number while locking the authenticated tenant row; request-body tenant IDs, expense numbers, status and audit user IDs are ignored.
 - The tenant creates and deactivates its own categories. Categories are deactivated rather than deleted so existing expense history remains available.
 - An optional supplier must be active and belong to the authenticated tenant. A free-text payee may be recorded instead. Both can be omitted.

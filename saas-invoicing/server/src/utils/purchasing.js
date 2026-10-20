@@ -67,11 +67,14 @@ function normalizeSupplier(body) {
   const business_name = normalizeText(source.business_name, 'Supplier name', 255, true)
   const contact_person = normalizeText(source.contact_person, 'Contact person', 255)
   const email = normalizeText(source.email, 'Email', 255)
-  const phone = normalizeText(source.phone, 'Phone', 50)
+  const phone = normalizeText(source.phone, 'Phone number', 50)
   const address = normalizeText(source.address, 'Address', 10000)
   const notes = normalizeText(source.notes, 'Notes', 10000)
   if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     throw badRequest('Email address is invalid')
+  }
+  if (phone && !/^\d{10}$/.test(phone)) {
+    throw badRequest('Phone number must contain exactly 10 digits')
   }
   return { business_name, contact_person, email, phone, address, notes }
 }

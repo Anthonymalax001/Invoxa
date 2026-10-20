@@ -195,7 +195,7 @@ export default function Dashboard() {
                     <p key={total.currency} className="mt-1 text-lg font-bold">
                       {total.currency} {Number(total.total).toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </p>
-                  )) : <p className="mt-1 text-sm text-gray-500">No approved expenses this month</p>
+                  )) : <p className="mt-1 text-sm text-gray-500">No approved or paid expenses this month</p>
                 ) : <p className="mt-1 text-sm text-gray-400">Loading…</p>}
                 <Link to="/expenses" className="mt-2 inline-block text-xs font-medium text-blue-600 hover:underline">View expenses</Link>
               </div>
