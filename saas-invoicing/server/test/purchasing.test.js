@@ -320,6 +320,9 @@ function installMockModule(modulePath, exports) {
 
 installMockModule(require.resolve('../src/config/db'), fakePool)
 const suppliersRouter = require('../src/routes/suppliers')
+installMockModule(require.resolve('../src/services/inventoryAccounting'), {
+  valueReceipt: async () => ({ journal: { id: 'inventory-test-journal' } })
+})
 const purchaseOrdersRouter = require('../src/routes/purchaseOrders')
 const token = jwt.sign({ userId: IDS.userA, tenantId: IDS.tenantA }, JWT_TEST_SECRET)
 

@@ -2,6 +2,8 @@ const express = require('express')
 const { validate: isUuid } = require('uuid')
 const pool = require('../config/db')
 const auth = require('../middleware/auth')
+const { logSafeError } = require('../utils/errorLogging')
+const { valueAdjustment, valueReceipt, valueReturn } = require('../services/inventoryAccounting')
 
 const router = express.Router()
 const MAX_NUMERIC_UNITS = 999999999999n
@@ -88,7 +90,7 @@ function logAndRespond(err, res, fallback) {
   if (err.code === '23505') {
     return res.status(409).json({ error: 'A product with this SKU already exists' })
   }
-  console.error(err)
+  logSafeError(fallback, err)
   return res.status(500).json({ error: fallback })
 }
 
@@ -232,8 +234,9 @@ async function changeStock(req, res, movementType, delta, metadata) {
     const movement = await client.query(
       `INSERT INTO stock_movements
          (tenant_id, product_id, movement_type, quantity_delta,
-          quantity_before, quantity_after, reference, notes, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+          quantity_before, quantity_after, reference, notes, created_by,
+          source_type, source_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
        RETURNING *`,
       [
         req.user.tenantId,
@@ -244,9 +247,37 @@ async function changeStock(req, res, movementType, delta, metadata) {
         formatFixed(after, 3),
         metadata.reference,
         metadata.notes,
-        isUuid(req.user.userId) ? req.user.userId : null
+        isUuid(req.user.userId) ? req.user.userId : null,
+        movementType === 'receipt' ? 'manual_receipt' : 'inventory_adjustment',
+        null
       ]
     )
+    const movementId = movement.rows[0].id
+    if (movementType === 'receipt') {
+      await valueReceipt(client, {
+        tenantId: req.user.tenantId, userId: req.user.userId,
+        productId: req.params.id, quantity: formatFixed(delta, 3),
+        unitCost: req.body?.unit_cost, entryDate: req.body?.entry_date || new Date().toISOString().slice(0, 10),
+        sourceType: 'manual_receipt', sourceId: movementId,
+        sourceReference: metadata.reference, movementId
+      })
+    } else if (movementType === 'return') {
+      await valueReturn(client, {
+        tenantId: req.user.tenantId, userId: req.user.userId,
+        productId: req.params.id, quantity: formatFixed(delta, 3),
+        entryDate: req.body?.entry_date || new Date().toISOString().slice(0, 10),
+        sourceType: 'inventory_return', sourceId: movementId,
+        sourceReference: metadata.reference, movementId
+      })
+    } else {
+      await valueAdjustment(client, {
+        tenantId: req.user.tenantId, userId: req.user.userId,
+        productId: req.params.id, quantityDelta: formatFixed(delta, 3),
+        unitCost: req.body?.unit_cost, entryDate: req.body?.entry_date || new Date().toISOString().slice(0, 10),
+        sourceType: 'inventory_adjustment', sourceId: movementId,
+        sourceReference: metadata.reference, movementId
+      })
+    }
 
     await client.query('COMMIT')
     transactionOpen = false
@@ -258,7 +289,7 @@ async function changeStock(req, res, movementType, delta, metadata) {
         transactionOpen = false
       } catch (rollbackError) {
         releaseError = rollbackError
-        console.error('Failed to roll back stock transaction', rollbackError)
+        logSafeError('Failed to roll back stock transaction', rollbackError)
       }
     }
     logAndRespond(err, res, 'Failed to update stock')
@@ -285,6 +316,16 @@ router.post('/:id/adjust', auth, async (req, res) => {
     return res.status(400).json({ error: 'Enter a non-zero adjustment and valid reference or notes' })
   }
   return changeStock(req, res, 'adjustment', delta, metadata)
+})
+
+router.post('/:id/return', auth, async (req, res) => {
+  if (!isUuid(req.params.id)) return res.status(404).json({ error: 'Product not found' })
+  const quantity = parseFixed(req.body?.quantity, 3)
+  const metadata = parseMovementMetadata(req.body)
+  if (quantity === null || quantity <= 0n || !metadata) {
+    return res.status(400).json({ error: 'Enter a positive quantity and valid reference or notes' })
+  }
+  return changeStock(req, res, 'return', quantity, metadata)
 })
 
 router.patch('/:id/status', auth, async (req, res) => {

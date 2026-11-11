@@ -7,7 +7,9 @@ const getAccessToken = async () => {
   ).toString('base64')
 
   const res = await axios.get(url, {
-    headers: { Authorization: `Basic ${auth}` }
+    headers: { Authorization: `Basic ${auth}` },
+    timeout: 15000,
+    maxRedirects: 0
   })
 
   return res.data.access_token
@@ -36,7 +38,7 @@ const stkPush = async ({ phone, amount, invoiceNumber }) => {
       Password: password,
       Timestamp: timestamp,
       TransactionType: 'CustomerPayBillOnline',
-      Amount: Math.ceil(amount),
+      Amount: amount,
       PartyA: formattedPhone,
       PartyB: process.env.MPESA_SHORTCODE,
       PhoneNumber: formattedPhone,
@@ -45,11 +47,34 @@ const stkPush = async ({ phone, amount, invoiceNumber }) => {
       TransactionDesc: `Payment for ${invoiceNumber}`
     },
     {
-      headers: { Authorization: `Bearer ${token}` }
+      headers: { Authorization: `Bearer ${token}` },
+      timeout: 15000,
+      maxRedirects: 0
     }
   )
 
   return res.data
 }
 
-module.exports = { getAccessToken, stkPush }
+const stkPushQuery = async ({ checkoutRequestId }) => {
+  const token = await getAccessToken()
+  const timestamp = new Date().toISOString().replace(/[-T:.Z]/g, '').slice(0, 14)
+  const password = Buffer.from(
+    `${process.env.MPESA_SHORTCODE}${process.env.MPESA_PASSKEY}${timestamp}`
+  ).toString('base64')
+
+  const res = await axios.post(
+    'https://sandbox.safaricom.co.ke/mpesa/stkpushquery/v1/query',
+    {
+      BusinessShortCode: process.env.MPESA_SHORTCODE,
+      Password: password,
+      Timestamp: timestamp,
+      CheckoutRequestID: checkoutRequestId
+    },
+    { headers: { Authorization: `Bearer ${token}` }, timeout: 15000, maxRedirects: 0 }
+  )
+
+  return res.data
+}
+
+module.exports = { getAccessToken, stkPush, stkPushQuery }

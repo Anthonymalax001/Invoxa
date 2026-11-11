@@ -3,6 +3,7 @@ const express = require('express')
 const bcrypt = require('bcryptjs')
 const jwt = require('jsonwebtoken')
 const pool = require('../config/db')
+const { logSafeError } = require('../utils/errorLogging')
 
 const router = express.Router()
 
@@ -104,7 +105,7 @@ router.post('/register', async (req, res) => {
 
   } catch (err) {
     await client.query('ROLLBACK')
-    console.error(err)
+    logSafeError('Registration failed', err)
     res.status(500).json({ error: 'Registration failed' })
   } finally {
     client.release()
@@ -166,7 +167,7 @@ router.post('/login', async (req, res) => {
     })
 
   } catch (err) {
-    console.error(err)
+    logSafeError('Login failed', err)
     res.status(500).json({ error: 'Login failed' })
   }
 })

@@ -8,6 +8,8 @@ const {
   normalizeReceipt,
   parseFixed
 } = require('../utils/purchasing')
+const { logSafeError } = require('../utils/errorLogging')
+const { valueReceipt } = require('../services/inventoryAccounting')
 
 const router = express.Router()
 const ORDER_STATUSES = ['draft', 'ordered', 'partially_received', 'received', 'cancelled']
@@ -42,7 +44,7 @@ async function withTransaction(work) {
         transactionOpen = false
       } catch (rollbackError) {
         releaseError = rollbackError
-        console.error('Failed to roll back purchasing transaction', rollbackError)
+        logSafeError('Failed to roll back purchasing transaction', rollbackError)
       }
     }
     throw error
@@ -143,7 +145,7 @@ function validateOrderId(id, res) {
 
 function sendError(res, error, fallback) {
   if (error.statusCode) return res.status(error.statusCode).json({ error: error.message })
-  console.error(error)
+  logSafeError(fallback, error)
   return res.status(500).json({ error: fallback })
 }
 
@@ -173,7 +175,7 @@ router.get('/', auth, async (req, res) => {
     )
     res.json(result.rows)
   } catch (error) {
-    console.error(error)
+    logSafeError('Failed to fetch purchase orders', error)
     res.status(500).json({ error: 'Failed to fetch purchase orders' })
   }
 })
@@ -423,12 +425,19 @@ router.post('/:id/receipts', auth, async (req, res) => {
           `INSERT INTO stock_movements
              (tenant_id, product_id, movement_type, quantity_delta,
               quantity_before, quantity_after, reference, notes, created_by,
-              purchase_order_receipt_item_id)
-           VALUES ($1, $2, 'receipt', $3, $4, $5, $6, $7, $8, $9)`,
+              purchase_order_receipt_item_id, source_type, source_id)
+           VALUES ($1, $2, 'receipt', $3, $4, $5, $6, $7, $8, $9, 'purchase_receipt', $10)`,
           [req.user.tenantId, orderItem.product_id, formatFixed(input.quantityMilli, 3),
             product.current_stock, stockUpdate.rows[0].current_stock,
-            order.purchase_order_number, movementNotes, req.user.userId, receiptItemId]
+            order.purchase_order_number, movementNotes, req.user.userId, receiptItemId, receiptItemId]
         )
+        await valueReceipt(client, {
+          tenantId: req.user.tenantId, userId: req.user.userId,
+          productId: orderItem.product_id, quantity: formatFixed(input.quantityMilli, 3),
+          unitCost: orderItem.unit_cost, entryDate: receiptInput.received_date,
+          sourceType: 'purchase_receipt', sourceId: receiptItemId,
+          sourceReference: order.purchase_order_number, receiptItemId
+        })
       }
 
       const completionResult = await client.query(

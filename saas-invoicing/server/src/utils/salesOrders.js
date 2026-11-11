@@ -1,4 +1,5 @@
 const { validate: isUuid } = require('uuid')
+const { calculateTaxTotals, normalizeTaxProfileRow } = require('./invoiceTax')
 
 const MAX_MONEY_CENTS = 999999999999n
 const MAX_QUANTITY_HUNDREDTHS = 9999999999n
@@ -57,16 +58,20 @@ function normalizeDate(value, label, required = false) {
   return value
 }
 
-function normalizeOrder(body) {
+function normalizeOrder(body, taxProfile) {
   const source = body && typeof body === 'object' && !Array.isArray(body) ? body : {}
   if (!isUuid(source.client_id)) throw validationError('A valid client is required')
+  const profile = normalizeTaxProfileRow(taxProfile)
   const order_date = normalizeDate(source.order_date, 'Order date', true)
   const expected_delivery_date = normalizeDate(source.expected_delivery_date, 'Expected delivery date')
   if (expected_delivery_date && expected_delivery_date < order_date) {
     throw validationError('Expected delivery date cannot be before the order date')
   }
-  const taxRateUnits = parseFixed(source.tax_rate ?? '0', 2, 3, 'Tax rate')
-  if (taxRateUnits > 10000n) throw validationError('Tax rate must be between 0 and 100')
+  if (!profile.is_active) throw validationError('Tax profile is inactive')
+  if (order_date < String(profile.effective_from).slice(0, 10) ||
+      (profile.effective_to && order_date > String(profile.effective_to).slice(0, 10))) {
+    throw validationError('Tax profile is not effective on the sales order date')
+  }
   const notes = normalizeText(source.notes, 'Notes', 10000)
   if (!Array.isArray(source.items) || source.items.length < 1 || source.items.length > 200) {
     throw validationError('At least one and no more than 200 product lines are required')
@@ -113,20 +118,23 @@ function normalizeOrder(body) {
 
   const subtotalCents = items.reduce((sum, item) => sum + item.lineSubtotalCents, 0n)
   const discountTotalCents = items.reduce((sum, item) => sum + item.discountCents, 0n)
-  const taxCents = (subtotalCents * taxRateUnits + 5000n) / 10000n
-  const totalCents = subtotalCents + taxCents
-  if (subtotalCents > MAX_MONEY_CENTS || discountTotalCents > MAX_MONEY_CENTS ||
+  const taxTotals = calculateTaxTotals(items.map((item) => item.lineSubtotalCents), profile)
+  const taxCents = parseFixed(taxTotals.tax_amount, 2, 10, 'Tax amount')
+  const totalCents = parseFixed(taxTotals.total, 2, 10, 'Order total')
+  const netSubtotalCents = parseFixed(taxTotals.subtotal, 2, 10, 'Order subtotal')
+  if (netSubtotalCents > MAX_MONEY_CENTS || subtotalCents > MAX_MONEY_CENTS || discountTotalCents > MAX_MONEY_CENTS ||
       taxCents > MAX_MONEY_CENTS || totalCents > MAX_MONEY_CENTS) {
     throw validationError('Sales order total exceeds the supported range')
   }
 
   return {
     client_id: source.client_id,
+    tax_profile_id: profile.id,
     order_date,
     expected_delivery_date,
-    subtotal: formatFixed(subtotalCents, 2),
+    subtotal: formatFixed(netSubtotalCents, 2),
     discount_total: formatFixed(discountTotalCents, 2),
-    tax_rate: formatFixed(taxRateUnits, 2),
+    tax_rate: profile.tax_rate,
     tax_amount: formatFixed(taxCents, 2),
     total: formatFixed(totalCents, 2),
     notes,
@@ -155,7 +163,10 @@ function normalizeFulfillment(body) {
     }
     return { sales_order_item_id: item.sales_order_item_id, quantity: formatFixed(quantity, 2), quantityUnits: quantity }
   })
-  return { items, notes: normalizeText(source.notes, 'Fulfillment notes', 10000) }
+  const fulfilledDate = source.fulfilled_date == null || source.fulfilled_date === ''
+    ? new Date().toISOString().slice(0, 10)
+    : normalizeDate(source.fulfilled_date, 'Fulfillment date')
+  return { items, notes: normalizeText(source.notes, 'Fulfillment notes', 10000), fulfilled_date: fulfilledDate }
 }
 
 module.exports = { formatFixed, normalizeDate, normalizeFulfillment, normalizeOrder, parseFixed }

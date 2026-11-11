@@ -222,6 +222,11 @@ function installMockModule(modulePath, exports) {
 }
 
 installMockModule(require.resolve('../src/config/db'), fakePool)
+installMockModule(require.resolve('../src/services/inventoryAccounting'), {
+  valueReceipt: async () => ({ journal: { id: 'inventory-test-journal' } }),
+  valueAdjustment: async () => ({ journal: { id: 'inventory-test-journal' } }),
+  valueReturn: async () => ({ journal: { id: 'inventory-test-journal' } })
+})
 const productsRouter = require('../src/routes/products')
 
 const token = jwt.sign({ userId: IDS.userA, tenantId: IDS.tenantA }, JWT_TEST_SECRET)

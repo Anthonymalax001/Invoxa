@@ -1,6 +1,7 @@
 const express = require('express')
 const pool = require('../config/db')
 const auth = require('../middleware/auth')
+const { logSafeError } = require('../utils/errorLogging')
 
 const router = express.Router()
 
@@ -18,7 +19,7 @@ router.get('/', auth, async (req, res) => {
     )
     res.json(result.rows)
   } catch (err) {
-    console.error(err)
+    logSafeError('Failed to fetch clients', err)
     res.status(500).json({ error: 'Failed to fetch clients' })
   }
 })
@@ -35,7 +36,7 @@ router.get('/:id', auth, async (req, res) => {
     }
     res.json(result.rows[0])
   } catch (err) {
-    console.error(err)
+    logSafeError('Failed to fetch client', err)
     res.status(500).json({ error: 'Failed to fetch client' })
   }
 })
@@ -63,7 +64,7 @@ router.post('/', auth, async (req, res) => {
     )
     res.status(201).json(result.rows[0])
   } catch (err) {
-    console.error(err)
+    logSafeError('Failed to create client', err)
     res.status(500).json({ error: 'Failed to create client' })
   }
 })
@@ -99,7 +100,7 @@ router.put('/:id', auth, async (req, res) => {
 
     res.json(result.rows[0])
   } catch (err) {
-    console.error(err)
+    logSafeError('Failed to update client', err)
     res.status(500).json({ error: 'Failed to update client' })
   }
 })
@@ -118,7 +119,7 @@ router.delete('/:id', auth, async (req, res) => {
 
     res.json({ message: 'Client deleted successfully' })
   } catch (err) {
-    console.error(err)
+    logSafeError('Failed to delete client', err)
     res.status(500).json({ error: 'Failed to delete client' })
   }
 })

@@ -7,7 +7,7 @@ const today = () => {
   return new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 10)
 }
 const emptyForm = () => ({
-  client_id: '', order_date: today(), expected_delivery_date: '', tax_rate: '16.00', notes: '',
+  client_id: '', order_date: today(), expected_delivery_date: '', tax_profile_id: '', notes: '',
   items: [{ product_id: '', quantity: '1.00', unit_price: '0.00', discount_rate: '0.00' }]
 })
 const money = (value) => `KES ${Number(value || 0).toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -44,6 +44,7 @@ export default function SalesOrders() {
   const [orders, setOrders] = useState([])
   const [clients, setClients] = useState([])
   const [products, setProducts] = useState([])
+  const [taxProfiles, setTaxProfiles] = useState([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
   const [searchInput, setSearchInput] = useState('')
@@ -85,10 +86,12 @@ export default function SalesOrders() {
   useEffect(() => {
     Promise.all([
       api.get('/clients'),
-      api.get('/products', { params: { active: 'true' } })
-    ]).then(([clientResponse, productResponse]) => {
+      api.get('/products', { params: { active: 'true' } }),
+      api.get('/accounting/tax-profiles', { params: { active: 'true' } })
+    ]).then(([clientResponse, productResponse, taxResponse]) => {
       setClients(clientResponse.data)
       setProducts(productResponse.data)
+      setTaxProfiles(taxResponse.data)
     }).catch((error) => {
       setLoadError(error.response?.data?.error || 'Could not load clients or products.')
     })
@@ -107,7 +110,7 @@ export default function SalesOrders() {
       client_id: order.client_id,
       order_date: String(order.order_date).slice(0, 10),
       expected_delivery_date: order.expected_delivery_date ? String(order.expected_delivery_date).slice(0, 10) : '',
-      tax_rate: String(order.tax_rate ?? '0'),
+      tax_profile_id: order.tax_profile_id || '',
       notes: order.notes || '',
       items: order.items.map((item) => ({
         product_id: item.product_id,
@@ -257,8 +260,16 @@ export default function SalesOrders() {
     const gross = Number(line.quantity || 0) * Number(line.unit_price || 0)
     return gross - gross * (Number(line.discount_rate || 0) / 100)
   }
-  const subtotalPreview = form.items.reduce((total, line) => total + linePreview(line), 0)
-  const taxPreview = subtotalPreview * Number(form.tax_rate || 0) / 100
+  const grossPreview = form.items.reduce((total, line) => total + linePreview(line), 0)
+  const selectedTaxProfile = taxProfiles.find((profile) => profile.id === form.tax_profile_id)
+  const previewRate = Number(selectedTaxProfile?.tax_rate || 0)
+  const taxPreview = selectedTaxProfile?.calculation_method === 'inclusive'
+    ? grossPreview * previewRate / (100 + previewRate)
+    : grossPreview * previewRate / 100
+  const subtotalPreview = selectedTaxProfile?.calculation_method === 'inclusive'
+    ? grossPreview - taxPreview
+    : grossPreview
+  const totalPreview = selectedTaxProfile?.calculation_method === 'inclusive' ? grossPreview : subtotalPreview + taxPreview
 
   const OrderActions = ({ order }) => (
     <div className="flex flex-wrap gap-3 text-sm">
@@ -335,8 +346,8 @@ export default function SalesOrders() {
                 <button type="button" disabled={form.items.length === 1} onClick={() => removeLine(index)} className="rounded-lg px-3 py-2 text-sm text-red-700 hover:bg-red-50 disabled:opacity-40">Remove</button>
               </div>)}</div>
             </div>
-            <div className="grid gap-4 sm:grid-cols-2"><label className="text-sm font-medium text-gray-700">Tax rate (%)<input type="number" min="0" max="100" step="0.01" value={form.tax_rate} onChange={(event) => setForm({ ...form, tax_rate: event.target.value })} className="mt-1 w-full rounded-lg border px-3 py-2.5" /><span className="mt-1 block text-xs font-normal text-gray-500">Totals shown here are estimates; the server recalculates and rounds them.</span></label><label className="text-sm font-medium text-gray-700">Notes<textarea maxLength={10000} rows="2" value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} className="mt-1 w-full rounded-lg border px-3 py-2.5" /></label></div>
-            <div className="ml-auto max-w-xs space-y-1 border-t pt-3 text-sm"><div className="flex justify-between"><span>Estimated net subtotal</span><span>{money(subtotalPreview)}</span></div><div className="flex justify-between"><span>Estimated tax</span><span>{money(taxPreview)}</span></div><div className="flex justify-between border-t pt-2 font-bold"><span>Estimated total</span><span>{money(subtotalPreview + taxPreview)}</span></div></div>
+            <div className="grid gap-4 sm:grid-cols-2"><label className="text-sm font-medium text-gray-700">Tax profile *<select required value={form.tax_profile_id} onChange={(event) => setForm({ ...form, tax_profile_id: event.target.value })} className="mt-1 w-full rounded-lg border bg-white px-3 py-2.5"><option value="">Select a configured profile</option>{taxProfiles.map((profile) => <option key={profile.id} value={profile.id}>{profile.name} · {profile.tax_rate}% · {profile.calculation_method}</option>)}</select><span className="mt-1 block text-xs font-normal text-gray-500">Tax treatment must be confirmed by your accountant. The server recalculates exact totals.</span></label><label className="text-sm font-medium text-gray-700">Notes<textarea maxLength={10000} rows="2" value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} className="mt-1 w-full rounded-lg border px-3 py-2.5" /></label></div>
+            <div className="ml-auto max-w-xs space-y-1 border-t pt-3 text-sm"><div className="flex justify-between"><span>Estimated net subtotal</span><span>{money(subtotalPreview)}</span></div><div className="flex justify-between"><span>Estimated tax{selectedTaxProfile?.calculation_method === 'inclusive' ? ' included' : ''}</span><span>{money(taxPreview)}</span></div><div className="flex justify-between border-t pt-2 font-bold"><span>Estimated total</span><span>{money(totalPreview)}</span></div></div>
             {formError && <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{formError}</p>}
             <div className="flex flex-col-reverse gap-2 border-t pt-4 sm:flex-row sm:justify-end"><button type="button" disabled={savingOrder} onClick={() => setFormOpen(false)} className="rounded-lg border px-4 py-2.5 text-gray-700">Cancel</button><button disabled={savingOrder} className="rounded-lg bg-blue-600 px-4 py-2.5 font-semibold text-white disabled:opacity-60">{savingOrder ? 'Saving…' : 'Save as draft'}</button></div>
           </form>
@@ -348,7 +359,7 @@ export default function SalesOrders() {
         {detailLoading ? <p className="py-10 text-center text-gray-500">Loading details…</p> : detailError ? <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{detailError}</p> : <>
           <div className="mb-5 grid gap-3 rounded-lg bg-gray-50 p-4 text-sm sm:grid-cols-2 lg:grid-cols-4"><div><p className="text-gray-500">Client</p><p className="font-semibold">{detail.client_name}</p></div><div><p className="text-gray-500">Order date</p><p className="font-semibold">{String(detail.order_date).slice(0, 10)}</p></div><div><p className="text-gray-500">Expected delivery</p><p className="font-semibold">{detail.expected_delivery_date ? String(detail.expected_delivery_date).slice(0, 10) : '—'}</p></div><div><p className="text-gray-500">Status</p><StatusBadge status={detail.status} /></div></div>
           <div className="overflow-x-auto rounded-lg border"><table className="min-w-full divide-y"><thead className="bg-gray-50 text-left text-xs uppercase text-gray-500"><tr><th className="px-4 py-3">Product</th><th className="px-4 py-3">Ordered</th><th className="px-4 py-3">Fulfilled</th><th className="px-4 py-3">Unit price</th><th className="px-4 py-3">Discount</th><th className="px-4 py-3">Subtotal</th></tr></thead><tbody className="divide-y text-sm">{detail.items?.map((item) => <tr key={item.id}><td className="px-4 py-3"><p className="font-medium">{item.product_name}</p><p className="text-xs text-gray-500">{item.product_sku}</p></td><td className="px-4 py-3">{quantity(item.quantity_ordered)}</td><td className="px-4 py-3">{quantity(item.quantity_fulfilled)}</td><td className="px-4 py-3">{money(item.unit_price)}</td><td className="px-4 py-3">{Number(item.discount_rate).toFixed(2)}% ({money(item.discount_amount)})</td><td className="px-4 py-3">{money(item.line_subtotal)}</td></tr>)}</tbody></table></div>
-          <div className="mt-4 ml-auto max-w-xs space-y-1 border-t pt-3 text-sm"><div className="flex justify-between"><span>Discounts</span><span>−{money(detail.discount_total)}</span></div><div className="flex justify-between"><span>Net subtotal</span><span>{money(detail.subtotal)}</span></div><div className="flex justify-between"><span>Tax ({Number(detail.tax_rate).toFixed(2)}%)</span><span>{money(detail.tax_amount)}</span></div><div className="flex justify-between border-t pt-2 text-base font-bold"><span>Total</span><span>{money(detail.total)}</span></div></div>
+          <div className="mt-4 ml-auto max-w-xs space-y-1 border-t pt-3 text-sm"><div className="flex justify-between"><span>Discounts</span><span>−{money(detail.discount_total)}</span></div><div className="flex justify-between"><span>Net subtotal</span><span>{money(detail.subtotal)}</span></div><div className="flex justify-between"><span>{detail.tax_snapshot?.profile_name || 'Tax'} ({Number(detail.tax_rate).toFixed(2)}%){detail.tax_snapshot?.calculation_method === 'inclusive' ? ' included' : ''}</span><span>{money(detail.tax_amount)}</span></div><div className="flex justify-between border-t pt-2 text-base font-bold"><span>Total</span><span>{money(detail.total)}</span></div></div>
           <div className="mt-7"><h3 className="mb-3 font-semibold text-gray-900">Fulfillment history</h3>{!detail.fulfillments?.length ? <p className="rounded-lg bg-gray-50 p-4 text-sm text-gray-500">No fulfillment has been recorded.</p> : <div className="space-y-3">{detail.fulfillments.map((fulfillment) => <article key={fulfillment.id} className="rounded-lg border p-4"><div className="flex flex-wrap justify-between gap-2"><p className="font-medium">Fulfilled {new Date(fulfillment.fulfilled_at).toLocaleString('en-KE')}</p><p className="text-xs text-gray-500">Reference {fulfillment.id.slice(0, 8)}</p></div><ul className="mt-2 space-y-1 text-sm text-gray-600">{fulfillment.items.map((item) => <li key={item.id}>{item.product_name}: {quantity(item.fulfilled_quantity)}</li>)}</ul>{fulfillment.notes && <p className="mt-2 text-sm text-gray-500">{fulfillment.notes}</p>}</article>)}</div>}</div>
           <div className="mt-6 rounded-lg border p-4">{detail.invoice ? <div className="flex flex-wrap items-center justify-between gap-3"><div><p className="font-semibold text-gray-900">Invoice {detail.invoice.invoice_number}</p><p className="text-sm text-gray-500">Created from this sales order</p></div><Link to="/invoices" className="rounded-lg border px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50">Open invoices</Link></div> : detail.status === 'fulfilled' ? <div className="flex flex-wrap items-center justify-between gap-3"><div><p className="font-semibold text-gray-900">Ready to invoice</p><p className="text-sm text-gray-500">One invoice will be created for the full fulfilled order.</p></div><button onClick={() => createInvoice(detail)} disabled={creatingInvoiceId === detail.id} className="rounded-lg bg-purple-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{creatingInvoiceId === detail.id ? 'Creating…' : 'Create invoice'}</button></div> : <p className="text-sm text-gray-500">Invoice creation becomes available after all order lines are fulfilled.</p>}</div>
         </>}

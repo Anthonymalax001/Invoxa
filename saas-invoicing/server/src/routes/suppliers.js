@@ -2,6 +2,7 @@ const express = require('express')
 const { validate: isUuid } = require('uuid')
 const pool = require('../config/db')
 const auth = require('../middleware/auth')
+const { logSafeError } = require('../utils/errorLogging')
 const { normalizeSupplier } = require('../utils/purchasing')
 
 const router = express.Router()
@@ -33,7 +34,7 @@ router.get('/', auth, async (req, res) => {
     )
     res.json(result.rows)
   } catch (err) {
-    console.error(err)
+    logSafeError('Failed to fetch suppliers', err)
     res.status(500).json({ error: 'Failed to fetch suppliers' })
   }
 })
@@ -56,7 +57,7 @@ router.post('/', auth, async (req, res) => {
     )
     res.status(201).json(result.rows[0])
   } catch (err) {
-    console.error(err)
+    logSafeError('Failed to create supplier', err)
     res.status(500).json({ error: 'Failed to create supplier' })
   }
 })
@@ -80,7 +81,7 @@ router.get('/:id/purchase-orders', auth, async (req, res) => {
     )
     res.json(result.rows)
   } catch (err) {
-    console.error(err)
+    logSafeError('Failed to fetch supplier purchase history', err)
     res.status(500).json({ error: 'Failed to fetch supplier purchase history' })
   }
 })
@@ -98,7 +99,7 @@ router.get('/:id', auth, async (req, res) => {
     if (result.rowCount !== 1) return res.status(404).json({ error: 'Supplier not found' })
     res.json(result.rows[0])
   } catch (err) {
-    console.error(err)
+    logSafeError('Failed to fetch supplier', err)
     res.status(500).json({ error: 'Failed to fetch supplier' })
   }
 })
@@ -124,7 +125,7 @@ router.put('/:id', auth, async (req, res) => {
     if (result.rowCount !== 1) return res.status(404).json({ error: 'Supplier not found' })
     res.json(result.rows[0])
   } catch (err) {
-    console.error(err)
+    logSafeError('Failed to update supplier', err)
     res.status(500).json({ error: 'Failed to update supplier' })
   }
 })
@@ -146,7 +147,7 @@ router.patch('/:id/status', auth, async (req, res) => {
     if (result.rowCount !== 1) return res.status(404).json({ error: 'Supplier not found' })
     res.json(result.rows[0])
   } catch (err) {
-    console.error(err)
+    logSafeError('Failed to update supplier status', err)
     res.status(500).json({ error: 'Failed to update supplier status' })
   }
 })

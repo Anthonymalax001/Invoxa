@@ -15,7 +15,9 @@ const IDS = {
   clientB: '20000000-0000-4000-8000-000000000002',
   productA: '30000000-0000-4000-8000-000000000001',
   productB: '30000000-0000-4000-8000-000000000002',
-  userA: '40000000-0000-4000-8000-000000000001'
+  userA: '40000000-0000-4000-8000-000000000001',
+  taxProfileA: '60000000-0000-4000-8000-000000000001',
+  taxAccountA: '60000000-0000-4000-8000-000000000002'
 }
 
 const makeState = () => ({
@@ -34,6 +36,14 @@ const makeState = () => ({
   movements: [],
   invoices: [],
   invoiceItems: [],
+  taxSnapshots: new Map(),
+  taxProfiles: new Map([[IDS.taxProfileA, {
+    id: IDS.taxProfileA, tenant_id: IDS.tenantA, profile_key: 'standard', name: 'Configured tax',
+    version: 1, tax_rate: '16.00', calculation_method: 'exclusive', rounding_method: 'invoice_total',
+    effective_from: '2020-01-01', effective_to: null, requires_tax_payable: true,
+    tax_payable_account_id: IDS.taxAccountA, is_active: true, created_by: IDS.userA
+  }]]),
+  accounts: new Map([[IDS.taxAccountA, { account_type: 'liability', is_active: true }]]),
   commitCount: 0,
   rollbackCount: 0,
   failStockMovement: false,
@@ -54,6 +64,26 @@ function queryDatabase(db, sql, params = []) {
   if (q.startsWith('SELECT id FROM clients')) {
     const client = db.clients.get(params[0])
     return result(client?.tenant_id === params[1] ? [{ id: client.id }] : [])
+  }
+  if (q.startsWith('SELECT id, tenant_id, profile_key, name, version, tax_rate')) {
+    const profile = db.taxProfiles.get(params[1])
+    return result(profile?.tenant_id === params[0] ? [{ ...profile }] : [])
+  }
+  if (q.startsWith('SELECT account_type, is_active FROM accounting_accounts')) {
+    const account = db.accounts.get(params[1])
+    return result(account ? [{ ...account }] : [])
+  }
+  if (q.startsWith('INSERT INTO accounting_invoice_tax_snapshots')) {
+    const snapshot = {
+      tenant_id: params[0], source_type: params[1], source_id: params[2],
+      tax_profile_id: params[3], profile_version: params[4], profile_key: params[5],
+      profile_name: params[6], tax_rate: params[7], calculation_method: params[8],
+      rounding_method: params[9], requires_tax_payable: params[10],
+      tax_payable_account_id: params[11], subtotal: params[12], tax_amount: params[13],
+      total: params[14], created_by: params[15], issued_at: null
+    }
+    db.taxSnapshots.set(`${params[0]}:${params[1]}:${params[2]}`, snapshot)
+    return result([{ id: id() }])
   }
   if (q.startsWith('SELECT id, name, sku, selling_price FROM products')) {
     const rows = params[1].map((productId) => db.products.get(productId))
@@ -98,6 +128,18 @@ function queryDatabase(db, sql, params = []) {
   if (q.startsWith('SELECT * FROM sales_order_items')) {
     const rows = (db.lines.get(params[1]) || []).filter((line) => line.tenant_id === params[0])
     return result(rows)
+  }
+  if (q.startsWith('SELECT tax_profile_id, profile_version, profile_name, tax_rate')) {
+    const snapshot = db.taxSnapshots.get(`${params[0]}:sales_order:${params[1]}`)
+    return result(snapshot ? [{ ...snapshot }] : [])
+  }
+  if (q.startsWith('SELECT tax_profile_id, profile_version, profile_key, profile_name, tax_rate')) {
+    const snapshot = db.taxSnapshots.get(`${params[0]}:sales_order:${params[1]}`)
+    return result(snapshot ? [{ ...snapshot }] : [])
+  }
+  if (q.startsWith('SELECT * FROM accounting_invoice_tax_snapshots')) {
+    const snapshot = db.taxSnapshots.get(`${params[0]}:sales_order:${params[1]}`)
+    return result(snapshot ? [{ ...snapshot }] : [])
   }
   if (q.startsWith('SELECT * FROM sales_order_fulfillments')) {
     const rows = [...db.fulfillments.values()].filter((f) =>
@@ -189,6 +231,9 @@ function queryDatabase(db, sql, params = []) {
     db.invoiceItems.push({ invoice_id: params[0], description: params[1], quantity: params[2], unit_price: params[3], amount: params[4] })
     return result([])
   }
+  if (q.startsWith('SELECT id FROM invoices WHERE tenant_id = $1 AND sales_order_id')) {
+    return result(db.invoices.filter((invoice) => invoice.tenant_id === params[0] && invoice.sales_order_id === params[1]).map((invoice) => ({ id: invoice.id })))
+  }
   throw new Error(`Unexpected test query: ${q}`)
 }
 
@@ -224,6 +269,9 @@ const installMockModule = (modulePath, exports) => {
   require.cache[modulePath] = mock
 }
 installMockModule(require.resolve('../src/config/db'), fakePool)
+installMockModule(require.resolve('../src/services/inventoryAccounting'), {
+  valueIssue: async () => ({ journal: { id: 'inventory-test-journal' } })
+})
 
 const salesOrderRouter = require('../src/routes/salesOrders')
 const tokenFor = (tenantId = IDS.tenantA) => jwt.sign({ userId: IDS.userA, tenantId, role: 'admin' }, JWT_TEST_SECRET)
@@ -263,7 +311,7 @@ const orderBody = (overrides = {}) => ({
   expected_delivery_date: '2026-10-25',
   subtotal: '0.01',
   total: '0.01',
-  tax_rate: '16.00',
+  tax_profile_id: IDS.taxProfileA,
   items: [{ product_id: IDS.productA, quantity: '2.00', unit_price: '100.00', discount_rate: '10.00' }],
   ...overrides
 })
@@ -319,6 +367,18 @@ test('calculates discounted subtotal, tax and total on the server', async () => 
     assert.equal(order.tax_amount, '28.80')
     assert.equal(order.total, '208.80')
     assert.equal(order.items[0].line_subtotal, '180.00')
+  })
+})
+
+test('rejects non-KES sales order currency instead of silently treating it as KES', async () => {
+  await withServer(async (baseUrl) => {
+    const response = await request(baseUrl, '/api/sales-orders', {
+      method: 'POST', body: orderBody({ currency: 'USD' })
+    })
+    assert.equal(response.status, 400)
+    assert.equal(response.data.error, 'Sales orders are KES-only; currency conversion is not supported')
+    assert.equal(state.db.orders.size, 0)
+    assert.equal(state.db.commitCount, 0)
   })
 })
 

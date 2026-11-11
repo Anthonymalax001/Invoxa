@@ -172,7 +172,10 @@ function normalizeReceipt(body) {
     }
     return { purchase_order_item_id: item.purchase_order_item_id, quantity: formatFixed(quantityMilli, 3), quantityMilli }
   })
-  return { items, notes: normalizeText(source.notes, 'Receipt notes', 10000) }
+  const receivedDate = source.received_date == null || source.received_date === ''
+    ? new Date().toISOString().slice(0, 10)
+    : normalizeIsoDate(source.received_date, 'Receipt date')
+  return { items, notes: normalizeText(source.notes, 'Receipt notes', 10000), received_date: receivedDate }
 }
 
 module.exports = {

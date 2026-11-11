@@ -11,6 +11,15 @@ import Suppliers from './pages/Suppliers'
 import Purchasing from './pages/Purchasing'
 import SalesOrders from './pages/SalesOrders'
 import Expenses from './pages/Expenses'
+import SupplierBills from './pages/SupplierBills'
+import FinancialReports from './pages/FinancialReports'
+import BankReconciliation from './pages/BankReconciliation'
+import AccountingPeriods from './pages/AccountingPeriods'
+import OpeningBalances from './pages/OpeningBalances'
+import Employees from './pages/Employees'
+import Attendance from './pages/Attendance'
+import Leave from './pages/Leave'
+import Payroll from './pages/Payroll'
 
 const PrivateRoute = ({ children }) => {
   const token = sessionStorage.getItem('token')
@@ -65,6 +74,15 @@ export default function App() {
         <Route path="/invoices" element={<PrivateRoute><Invoices /></PrivateRoute>} />
         <Route path="/products" element={<PrivateRoute><Products /></PrivateRoute>} />
         <Route path="/suppliers" element={<PrivateRoute><Suppliers /></PrivateRoute>} />
+        <Route path="/supplier-bills" element={<PrivateRoute><SupplierBills /></PrivateRoute>} />
+        <Route path="/financial-reports" element={<PrivateRoute><FinancialReports /></PrivateRoute>} />
+        <Route path="/bank-reconciliation" element={<PrivateRoute><BankReconciliation /></PrivateRoute>} />
+        <Route path="/accounting-periods" element={<PrivateRoute><AccountingPeriods /></PrivateRoute>} />
+        <Route path="/opening-balances" element={<PrivateRoute><OpeningBalances /></PrivateRoute>} />
+        <Route path="/employees" element={<PrivateRoute><Employees /></PrivateRoute>} />
+        <Route path="/attendance" element={<PrivateRoute><Attendance /></PrivateRoute>} />
+        <Route path="/leave" element={<PrivateRoute><Leave /></PrivateRoute>} />
+        <Route path="/payroll" element={<PrivateRoute><Payroll /></PrivateRoute>} />
         <Route path="/purchasing" element={<PrivateRoute><Purchasing /></PrivateRoute>} />
         <Route path="/sales-orders" element={<PrivateRoute><SalesOrders /></PrivateRoute>} />
         <Route path="/expenses" element={<PrivateRoute><Expenses /></PrivateRoute>} />

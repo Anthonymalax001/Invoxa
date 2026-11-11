@@ -6,7 +6,12 @@
   "scripts": {
     "dev": "nodemon src/index.js",
     "start": "node src/index.js",
-    "test": "node --test"
+    "test": "node --test",
+    "test:accounting:integration": "node --test integration/accounting-postgres.js",
+    "test:invoice-accounting:integration": "node --test integration/invoice-accounting-postgres.js",
+    "test:mpesa:integration": "node --test integration/mpesa-postgres.js",
+    "test:hr-payroll:integration": "node --test integration/hr-payroll-postgres.js",
+    "probe:hr-payroll:connectivity": "node integration/hr-payroll-connectivity-probe.js"
   },
   "keywords": [],
   "author": "",

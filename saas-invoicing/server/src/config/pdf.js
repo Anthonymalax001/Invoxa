@@ -126,6 +126,10 @@ const generateInvoicePDF = (invoice, items, tenant) => {
     // ── Totals ───────────────────────────────────────────
     const totalsY = y + 20
 
+    const taxName = invoice.tax_profile_name || 'VAT'
+    const taxIncluded = invoice.tax_calculation_method === 'inclusive'
+    const taxLabel = `${taxName} (${invoice.tax_rate}%)${taxIncluded ? ' included' : ''}:`
+
     doc
       .moveTo(350, totalsY - 10)
       .lineTo(545, totalsY - 10)
@@ -137,11 +141,11 @@ const generateInvoicePDF = (invoice, items, tenant) => {
       .fontSize(10)
       .fillColor('#6b7280')
       .font('Helvetica')
-      .text('Subtotal:', 350, totalsY)
+      .text(taxIncluded ? 'Subtotal (tax-exclusive):' : 'Subtotal:', 350, totalsY)
       .text(`KES ${parseFloat(invoice.subtotal).toLocaleString()}`, 470, totalsY, { width: 70, align: 'right' })
 
     doc
-      .text(`VAT (${invoice.tax_rate}%):`, 350, totalsY + 20)
+      .text(taxLabel, 350, totalsY + 20)
       .text(`KES ${parseFloat(invoice.tax_amount).toLocaleString()}`, 470, totalsY + 20, { width: 70, align: 'right' })
 
     // Total row

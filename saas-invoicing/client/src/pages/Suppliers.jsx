@@ -16,6 +16,7 @@ function Nav() {
       <Link to="/products" className="hover:text-blue-600">Products</Link>
       <Link to="/suppliers" className="text-blue-600">Suppliers</Link>
       <Link to="/purchasing" className="hover:text-blue-600">Purchasing</Link>
+      <Link to="/supplier-bills" className="hover:text-blue-600">Supplier bills</Link>
       <Link to="/sales-orders" className="hover:text-blue-600">Sales Orders</Link>
       <Link to="/expenses" className="hover:text-blue-600">Expenses</Link>
       <Link to="/invoices" className="hover:text-blue-600">Invoices</Link>

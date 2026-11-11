@@ -8,7 +8,8 @@ const today = () => {
 }
 const emptyForm = () => ({
   expense_date: today(), category_id: '', supplier_id: '', payee_name: '', description: '',
-  amount: '', currency: 'KES', payment_method: '', payment_reference: '', notes: ''
+  amount: '', currency: 'KES', input_vat_amount: '0.00', input_vat_document_reference: '',
+  input_vat_recoverable: false, payment_method: '', payment_reference: '', notes: ''
 })
 const makeKey = () => window.crypto?.randomUUID?.() || `expense-${Date.now()}-${Math.random().toString(36).slice(2)}`
 const money = (amount, currency) => `${currency || 'KES'} ${Number(amount || 0).toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -44,6 +45,12 @@ function StatusBadge({ status }) {
 export default function Expenses() {
   const [expenses, setExpenses] = useState([])
   const [categories, setCategories] = useState([])
+  const [accounts, setAccounts] = useState([])
+  const [accountingSettings, setAccountingSettings] = useState(null)
+  const [accountingSettingsForm, setAccountingSettingsForm] = useState({
+    base_currency: '', expense_payable_account_id: '', input_vat_account_id: ''
+  })
+  const [categoryMappings, setCategoryMappings] = useState({})
   const [suppliers, setSuppliers] = useState([])
   const [summary, setSummary] = useState(null)
   const [period, setPeriod] = useState('month')
@@ -72,8 +79,11 @@ export default function Expenses() {
   const [categoryForm, setCategoryForm] = useState({ name: '', description: '' })
   const [categoryError, setCategoryError] = useState('')
   const [savingCategory, setSavingCategory] = useState(false)
+  const [savingAccountingSetup, setSavingAccountingSetup] = useState(false)
   const [paymentTarget, setPaymentTarget] = useState(null)
-  const [paymentForm, setPaymentForm] = useState({ payment_method: '', payment_reference: '' })
+  const [paymentForm, setPaymentForm] = useState({
+    payment_method: '', payment_reference: '', payment_date: today(), cash_account_id: ''
+  })
   const [paymentError, setPaymentError] = useState('')
   const [savingPayment, setSavingPayment] = useState(false)
   const [actionError, setActionError] = useState('')
@@ -87,14 +97,26 @@ export default function Expenses() {
       from: fromDate || undefined, to: toDate || undefined
     }
     try {
-      const [expenseResponse, categoryResponse, supplierResponse] = await Promise.all([
+      const [expenseResponse, categoryResponse, supplierResponse, accountResponse, settingsResponse] = await Promise.all([
         api.get('/expenses', { params }),
         api.get('/expenses/categories', { params: { active: 'true' } }),
-        api.get('/suppliers', { params: { active: 'true' } })
+        api.get('/suppliers', { params: { active: 'true' } }),
+        api.get('/accounting/accounts', { params: { active: 'true' } }),
+        api.get('/accounting/settings')
       ])
       setExpenses(expenseResponse.data)
       setCategories(categoryResponse.data)
       setSuppliers(supplierResponse.data)
+      setAccounts(accountResponse.data)
+      setAccountingSettings(settingsResponse.data)
+      setAccountingSettingsForm({
+        base_currency: settingsResponse.data?.base_currency || '',
+        expense_payable_account_id: settingsResponse.data?.expense_payable_account_id || '',
+        input_vat_account_id: settingsResponse.data?.input_vat_account_id || ''
+      })
+      setCategoryMappings(Object.fromEntries(categoryResponse.data.map((category) => [
+        category.id, category.accounting_account_id || ''
+      ])))
     } catch (error) {
       setLoadError(error.response?.data?.error || 'Could not load expenses. Check that the required migrations are installed, then retry.')
     } finally {
@@ -136,6 +158,9 @@ export default function Expenses() {
       description: expense.description,
       amount: String(expense.amount),
       currency: expense.currency.trim(),
+      input_vat_amount: String(expense.input_vat_amount || '0.00'),
+      input_vat_document_reference: expense.input_vat_document_reference || '',
+      input_vat_recoverable: expense.input_vat_recoverable === true,
       payment_method: expense.payment_method || '',
       payment_reference: expense.payment_reference || '',
       notes: expense.notes || ''
@@ -176,10 +201,13 @@ export default function Expenses() {
   }
 
   const changeStatus = async (expense, status) => {
-    if (status === 'cancelled' && !window.confirm(`Cancel ${expense.expense_number}?`)) return
+    const reason = status === 'cancelled'
+      ? window.prompt(`Reason for cancelling ${expense.expense_number}:`)
+      : null
+    if (status === 'cancelled' && !reason?.trim()) return
     setActionError('')
     try {
-      await api.patch(`/expenses/${expense.id}/status`, { status })
+      await api.patch(`/expenses/${expense.id}/status`, { status, reason: reason?.trim() })
       setReloadKey((value) => value + 1)
       if (detail?.id === expense.id) await showDetails(expense)
     } catch (error) {
@@ -189,7 +217,10 @@ export default function Expenses() {
 
   const openPayment = (expense) => {
     setPaymentTarget(expense)
-    setPaymentForm({ payment_method: expense.payment_method || '', payment_reference: expense.payment_reference || '' })
+    setPaymentForm({
+      payment_method: expense.payment_method || '', payment_reference: expense.payment_reference || '',
+      payment_date: today(), cash_account_id: ''
+    })
     setPaymentError('')
   }
 
@@ -226,6 +257,54 @@ export default function Expenses() {
     }
   }
 
+  const saveCategoryMapping = async (category) => {
+    setCategoryError('')
+    try {
+      await api.patch(`/expenses/categories/${category.id}/mapping`, {
+        accounting_account_id: categoryMappings[category.id] || null
+      })
+      setReloadKey((value) => value + 1)
+    } catch (error) {
+      setCategoryError(error.response?.data?.error || 'Could not save the category account mapping.')
+    }
+  }
+
+  const saveAccountingSetup = async (event) => {
+    event.preventDefault()
+    setSavingAccountingSetup(true)
+    setCategoryError('')
+    try {
+      const response = await api.put('/accounting/settings', {
+        ...accountingSettingsForm,
+        expense_payable_account_id: accountingSettingsForm.expense_payable_account_id || null,
+        input_vat_account_id: accountingSettingsForm.input_vat_account_id || null
+      })
+      setAccountingSettings(response.data)
+      setReloadKey((value) => value + 1)
+    } catch (error) {
+      setCategoryError(error.response?.data?.error || 'Could not save expense accounting settings.')
+    } finally {
+      setSavingAccountingSetup(false)
+    }
+  }
+
+  const reverseExpense = async (expense) => {
+    const reason = window.prompt(`Correction reason for ${expense.expense_number}:`)
+    if (!reason?.trim()) return
+    const reversalDate = window.prompt('Reversal date (YYYY-MM-DD):', today())
+    if (!reversalDate) return
+    setActionError('')
+    try {
+      await api.post(`/expenses/${expense.id}/reverse`, {
+        confirm: true, reason: reason.trim(), reversal_date: reversalDate
+      })
+      setReloadKey((value) => value + 1)
+      if (detail?.id === expense.id) await showDetails(expense)
+    } catch (error) {
+      setActionError(error.response?.data?.error || 'Could not reverse the expense journals.')
+    }
+  }
+
   const deactivateCategory = async (category) => {
     if (!window.confirm(`Deactivate ${category.name}? Existing expenses will keep this category.`)) return
     try {
@@ -243,8 +322,11 @@ export default function Expenses() {
         <button onClick={() => openEdit(expense)} className="text-gray-700 hover:underline">Edit</button>
         <button onClick={() => changeStatus(expense, 'approved')} className="text-green-700 hover:underline">Approve</button>
       </>}
+      {expense.status === 'approved' && !expense.approval_journal_entry_id && <button onClick={() => changeStatus(expense, 'approved')} className="text-amber-700 hover:underline">Post to ledger</button>}
       {expense.status === 'approved' && <button onClick={() => openPayment(expense)} className="text-green-700 hover:underline">Record payment</button>}
-      {['draft', 'approved'].includes(expense.status) && <button onClick={() => changeStatus(expense, 'cancelled')} className="text-red-700 hover:underline">Cancel</button>}
+      {expense.status === 'paid' && !expense.payment_journal_entry_id && <button onClick={() => openPayment(expense)} className="text-amber-700 hover:underline">Complete accounting</button>}
+      {['approved', 'paid'].includes(expense.status) && expense.approval_journal_entry_id && <button onClick={() => reverseExpense(expense)} className="text-red-700 hover:underline">Reverse accounting</button>}
+      {['draft', 'approved'].includes(expense.status) && !expense.approval_journal_entry_id && <button onClick={() => changeStatus(expense, 'cancelled')} className="text-red-700 hover:underline">Cancel</button>}
     </div>
   )
 
@@ -268,6 +350,26 @@ export default function Expenses() {
         </div>
 
         <p className="mb-5 rounded-lg border border-blue-100 bg-blue-50 p-3 text-sm text-blue-900">Expenses are entered manually. Bank and M-Pesa transaction imports are not connected, and invoices or purchase orders do not create expenses automatically.</p>
+
+        <details className="mb-5 rounded-xl border bg-white p-4 shadow-sm" open>
+          <summary className="cursor-pointer font-semibold text-gray-900">Expense accounting setup</summary>
+          <p className="mt-2 text-sm text-gray-600">Map categories to tenant expense accounts and choose the expense payable account. VAT is never inferred; the recorded VAT amount must be included in the total expense amount.</p>
+          <form onSubmit={saveAccountingSetup} className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <label className="text-sm">Base currency *<select required value={accountingSettingsForm.base_currency} onChange={(event) => setAccountingSettingsForm({ ...accountingSettingsForm, base_currency: event.target.value })} className="mt-1 w-full rounded border bg-white p-2"><option value="">Choose currency</option>{['KES', 'USD', 'EUR', 'GBP', 'TZS', 'UGX'].map((currency) => <option key={currency}>{currency}</option>)}</select></label>
+            <label className="text-sm">Accounts payable account<select value={accountingSettingsForm.expense_payable_account_id} onChange={(event) => setAccountingSettingsForm({ ...accountingSettingsForm, expense_payable_account_id: event.target.value })} className="mt-1 w-full rounded border bg-white p-2"><option value="">Use unique liability account if available</option>{accounts.filter((account) => account.account_type === 'liability' && account.normal_balance === 'credit').map((account) => <option key={account.id} value={account.id}>{account.account_code} · {account.name}</option>)}</select></label>
+            <label className="text-sm">Input VAT account (optional)<select value={accountingSettingsForm.input_vat_account_id} onChange={(event) => setAccountingSettingsForm({ ...accountingSettingsForm, input_vat_account_id: event.target.value })} className="mt-1 w-full rounded border bg-white p-2"><option value="">Not configured</option>{accounts.filter((account) => account.account_type === 'asset' && account.normal_balance === 'debit').map((account) => <option key={account.id} value={account.id}>{account.account_code} · {account.name}</option>)}</select></label>
+            <div className="sm:col-span-2 lg:col-span-3"><button disabled={savingAccountingSetup} className="rounded bg-blue-700 px-4 py-2 font-semibold text-white disabled:opacity-50">{savingAccountingSetup ? 'Saving…' : 'Save accounting setup'}</button>{accountingSettings && <span className="ml-3 text-xs text-gray-500">Configured base currency: {accountingSettings.base_currency}</span>}</div>
+          </form>
+          <div className="mt-5 space-y-3">
+            <h3 className="font-semibold text-gray-800">Category account mappings</h3>
+            {categories.map((category) => <div key={category.id} className="grid items-center gap-2 rounded border p-3 sm:grid-cols-[1fr_2fr_auto]">
+              <span className="text-sm font-medium">{category.name}</span>
+              <select value={categoryMappings[category.id] || ''} onChange={(event) => setCategoryMappings({ ...categoryMappings, [category.id]: event.target.value })} className="rounded border bg-white p-2 text-sm"><option value="">Select expense account</option>{accounts.filter((account) => account.account_type === 'expense' && account.normal_balance === 'debit').map((account) => <option key={account.id} value={account.id}>{account.account_code} · {account.name}</option>)}</select>
+              <button onClick={() => saveCategoryMapping(category)} className="rounded border px-3 py-2 text-sm font-medium">Save mapping</button>
+            </div>)}
+          </div>
+          {categoryError && <p role="alert" className="mt-3 rounded bg-red-50 p-3 text-sm text-red-700">{categoryError}</p>}
+        </details>
 
         {actionError && <div role="alert" className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{actionError}</div>}
         {categories.length === 0 && !loading && <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"><span>Add an expense category before creating expenses.</span><button onClick={() => setCategoryManagerOpen(true)} className="font-semibold underline">Add a category</button></div>}
@@ -309,9 +411,15 @@ export default function Expenses() {
             <label className="text-sm font-medium text-gray-700">Category *<select required value={form.category_id} onChange={(event) => setForm({ ...form, category_id: event.target.value })} className="mt-1 w-full rounded-lg border bg-white px-3 py-2.5"><option value="">Choose category</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>
             <label className="text-sm font-medium text-gray-700">Supplier (optional)<select value={form.supplier_id} onChange={(event) => setForm({ ...form, supplier_id: event.target.value })} className="mt-1 w-full rounded-lg border bg-white px-3 py-2.5"><option value="">No supplier selected</option>{suppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.business_name}</option>)}</select></label>
             <label className="text-sm font-medium text-gray-700">Payee name<input maxLength="255" value={form.payee_name} onChange={(event) => setForm({ ...form, payee_name: event.target.value })} className="mt-1 w-full rounded-lg border px-3 py-2.5" /></label>
-            <label className="text-sm font-medium text-gray-700">Amount *<input required type="number" min="0.01" step="0.01" value={form.amount} onChange={(event) => setForm({ ...form, amount: event.target.value })} className="mt-1 w-full rounded-lg border px-3 py-2.5" /></label>
+            <label className="text-sm font-medium text-gray-700">Total amount including VAT *<input required type="number" min="0.01" step="0.01" value={form.amount} onChange={(event) => setForm({ ...form, amount: event.target.value })} className="mt-1 w-full rounded-lg border px-3 py-2.5" /></label>
             <label className="text-sm font-medium text-gray-700">Currency<select value={form.currency} onChange={(event) => setForm({ ...form, currency: event.target.value })} className="mt-1 w-full rounded-lg border bg-white px-3 py-2.5">{['KES', 'USD', 'EUR', 'GBP', 'TZS', 'UGX'].map((currency) => <option key={currency}>{currency}</option>)}</select></label>
           </div>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <label className="text-sm font-medium text-gray-700">Recorded VAT amount<input type="number" min="0" step="0.01" value={form.input_vat_amount} onChange={(event) => setForm({ ...form, input_vat_amount: event.target.value })} className="mt-1 w-full rounded-lg border px-3 py-2.5" /></label>
+            <label className="text-sm font-medium text-gray-700">Tax document reference<input maxLength="255" value={form.input_vat_document_reference} onChange={(event) => setForm({ ...form, input_vat_document_reference: event.target.value })} className="mt-1 w-full rounded-lg border px-3 py-2.5" /></label>
+            <label className="flex items-center gap-2 pt-5 text-sm font-medium text-gray-700"><input type="checkbox" checked={form.input_vat_recoverable} onChange={(event) => setForm({ ...form, input_vat_recoverable: event.target.checked })} />VAT is recoverable</label>
+          </div>
+          <p className="text-xs text-gray-500">VAT amount is entered from the tax document. Recoverability is off unless explicitly selected; no tax rate is calculated.</p>
           <label className="block text-sm font-medium text-gray-700">Description *<input required maxLength="2000" value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} className="mt-1 w-full rounded-lg border px-3 py-2.5" /></label>
           <div className="grid gap-4 sm:grid-cols-2"><label className="text-sm font-medium text-gray-700">Payment method (optional)<select value={form.payment_method} onChange={(event) => setForm({ ...form, payment_method: event.target.value })} className="mt-1 w-full rounded-lg border bg-white px-3 py-2.5"><option value="">Not recorded</option>{METHODS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label className="text-sm font-medium text-gray-700">Payment reference<input maxLength="255" value={form.payment_reference} onChange={(event) => setForm({ ...form, payment_reference: event.target.value })} className="mt-1 w-full rounded-lg border px-3 py-2.5" /></label></div>
           <label className="block text-sm font-medium text-gray-700">Notes<textarea maxLength="10000" rows="3" value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} className="mt-1 w-full rounded-lg border px-3 py-2.5" /></label>
@@ -327,7 +435,7 @@ export default function Expenses() {
         <div className="mt-5"><h3 className="mb-2 font-semibold text-gray-800">Active categories</h3>{categories.length === 0 ? <p className="rounded-lg bg-gray-50 p-4 text-sm text-gray-500">No categories yet.</p> : <ul className="divide-y rounded-lg border">{categories.map((category) => <li key={category.id} className="flex items-center justify-between gap-3 p-3"><div><p className="font-medium text-gray-800">{category.name}</p><p className="text-xs text-gray-500">{category.expense_count} expenses</p></div><button onClick={() => deactivateCategory(category)} className="text-sm text-red-700 hover:underline">Deactivate</button></li>)}</ul>}</div>
       </section></div>}
 
-      {paymentTarget && <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4"><section role="dialog" aria-modal="true" aria-labelledby="expense-payment-title" className="w-full max-w-lg rounded-t-2xl bg-white p-5 shadow-xl sm:rounded-2xl sm:p-6"><h2 id="expense-payment-title" className="text-xl font-bold text-gray-900">Record payment</h2><p className="mt-1 text-sm text-gray-500">{paymentTarget.expense_number} · {money(paymentTarget.amount, paymentTarget.currency.trim())}</p><form onSubmit={recordPayment} className="mt-5 space-y-4"><label className="block text-sm font-medium text-gray-700">Payment method *<select required value={paymentForm.payment_method} onChange={(event) => setPaymentForm({ ...paymentForm, payment_method: event.target.value })} className="mt-1 w-full rounded-lg border bg-white px-3 py-2.5"><option value="">Choose method</option>{METHODS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label className="block text-sm font-medium text-gray-700">Payment reference<input maxLength="255" value={paymentForm.payment_reference} onChange={(event) => setPaymentForm({ ...paymentForm, payment_reference: event.target.value })} className="mt-1 w-full rounded-lg border px-3 py-2.5" /></label>{paymentError && <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{paymentError}</p>}<p className="text-xs text-gray-500">Marking paid records the payment method, user and timestamp. It does not initiate a bank or M-Pesa transfer.</p><div className="flex justify-end gap-2 border-t pt-4"><button type="button" disabled={savingPayment} onClick={() => setPaymentTarget(null)} className="rounded-lg border px-4 py-2.5">Close</button><button disabled={savingPayment} className="rounded-lg bg-green-600 px-4 py-2.5 font-semibold text-white disabled:opacity-50">{savingPayment ? 'Recording…' : 'Confirm payment'}</button></div></form></section></div>}
+      {paymentTarget && <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4"><section role="dialog" aria-modal="true" aria-labelledby="expense-payment-title" className="w-full max-w-lg rounded-t-2xl bg-white p-5 shadow-xl sm:rounded-2xl sm:p-6"><h2 id="expense-payment-title" className="text-xl font-bold text-gray-900">Record payment</h2><p className="mt-1 text-sm text-gray-500">{paymentTarget.expense_number} · {money(paymentTarget.amount, paymentTarget.currency.trim())}</p><form onSubmit={recordPayment} className="mt-5 space-y-4"><label className="block text-sm font-medium text-gray-700">Payment method *<select required value={paymentForm.payment_method} onChange={(event) => setPaymentForm({ ...paymentForm, payment_method: event.target.value })} className="mt-1 w-full rounded-lg border bg-white px-3 py-2.5"><option value="">Choose method</option>{METHODS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label className="block text-sm font-medium text-gray-700">Cash or bank account *<select required value={paymentForm.cash_account_id} onChange={(event) => setPaymentForm({ ...paymentForm, cash_account_id: event.target.value })} className="mt-1 w-full rounded-lg border bg-white px-3 py-2.5"><option value="">Choose account</option>{accounts.filter((account) => account.account_type === 'asset' && account.normal_balance === 'debit').map((account) => <option key={account.id} value={account.id}>{account.account_code} · {account.name}</option>)}</select></label><label className="block text-sm font-medium text-gray-700">Payment date *<input required type="date" value={paymentForm.payment_date} onChange={(event) => setPaymentForm({ ...paymentForm, payment_date: event.target.value })} className="mt-1 w-full rounded-lg border px-3 py-2.5" /></label><label className="block text-sm font-medium text-gray-700">Payment reference<input maxLength="255" value={paymentForm.payment_reference} onChange={(event) => setPaymentForm({ ...paymentForm, payment_reference: event.target.value })} className="mt-1 w-full rounded-lg border px-3 py-2.5" /></label>{paymentError && <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{paymentError}</p>}<p className="text-xs text-gray-500">Marking paid records the payment method, user and timestamp. It does not initiate a bank or M-Pesa transfer.</p><div className="flex justify-end gap-2 border-t pt-4"><button type="button" disabled={savingPayment} onClick={() => setPaymentTarget(null)} className="rounded-lg border px-4 py-2.5">Close</button><button disabled={savingPayment} className="rounded-lg bg-green-600 px-4 py-2.5 font-semibold text-white disabled:opacity-50">{savingPayment ? 'Recording…' : 'Confirm payment'}</button></div></form></section></div>}
 
       {detail && <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4"><section role="dialog" aria-modal="true" aria-labelledby="expense-detail-title" className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-t-2xl bg-white p-5 shadow-xl sm:rounded-2xl sm:p-6"><div className="mb-5 flex items-start justify-between"><div><p className="text-sm text-blue-600">Expense record</p><h2 id="expense-detail-title" className="text-xl font-bold text-gray-900">{detail.expense_number}</h2></div><button onClick={() => setDetail(null)} className="rounded-md px-2 py-1 text-xl text-gray-500" aria-label="Close">×</button></div>{detailLoading ? <p className="py-10 text-center text-gray-500">Loading details…</p> : detailError ? <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{detailError}</p> : <><div className="grid gap-4 rounded-lg bg-gray-50 p-4 text-sm sm:grid-cols-2"><div><p className="text-gray-500">Status</p><StatusBadge status={detail.status} /></div><div><p className="text-gray-500">Amount</p><p className="font-semibold">{money(detail.amount, detail.currency.trim())}</p></div><div><p className="text-gray-500">Expense date</p><p>{String(detail.expense_date).slice(0, 10)}</p></div><div><p className="text-gray-500">Category</p><p>{detail.category_name}</p></div><div><p className="text-gray-500">Supplier / payee</p><p>{detail.supplier_name || detail.payee_name || '—'}</p></div><div><p className="text-gray-500">Payment method / reference</p><p>{detail.payment_method || '—'}{detail.payment_reference ? ` · ${detail.payment_reference}` : ''}</p></div><div className="sm:col-span-2"><p className="text-gray-500">Description</p><p>{detail.description}</p></div>{detail.notes && <div className="sm:col-span-2"><p className="text-gray-500">Notes</p><p className="whitespace-pre-wrap">{detail.notes}</p></div>}</div><div className="mt-4 space-y-1 text-xs text-gray-500"><p>Created {new Date(detail.created_at).toLocaleString('en-KE')}{detail.created_by ? ` · user ${detail.created_by}` : ''}</p>{detail.approved_at && <p>Approved {new Date(detail.approved_at).toLocaleString('en-KE')}{detail.approved_by ? ` · user ${detail.approved_by}` : ''}</p>}{detail.paid_at && <p>Paid {new Date(detail.paid_at).toLocaleString('en-KE')}{detail.paid_by ? ` · user ${detail.paid_by}` : ''}</p>}{detail.cancelled_at && <p>Cancelled {new Date(detail.cancelled_at).toLocaleString('en-KE')}{detail.cancelled_by ? ` · user ${detail.cancelled_by}` : ''}</p>}</div></>}</section></div>}
     </div>

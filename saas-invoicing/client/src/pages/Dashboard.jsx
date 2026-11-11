@@ -121,6 +121,10 @@ export default function Dashboard() {
           <Link to="/sales-orders" className="hover:text-blue-600">Sales Orders</Link>
           <Link to="/expenses" className="hover:text-blue-600">Expenses</Link>
           <Link to="/invoices" className="hover:text-blue-600">Invoices</Link>
+          <Link to="/financial-reports" className="hover:text-blue-600">Financial Reports</Link>
+          <Link to="/bank-reconciliation" className="hover:text-blue-600">Bank Reconciliation</Link>
+          <Link to="/accounting-periods" className="hover:text-blue-600">Accounting Periods</Link>
+          <Link to="/opening-balances" className="hover:text-blue-600">Opening Balances</Link>
         </div>
 
         {/* ✅ FIX: fallback text */}

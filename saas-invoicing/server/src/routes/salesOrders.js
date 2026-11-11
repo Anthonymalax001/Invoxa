@@ -8,6 +8,9 @@ const {
   normalizeOrder,
   parseFixed
 } = require('../utils/salesOrders')
+const { loadTaxProfile, saveTaxSnapshot, copySalesOrderTaxSnapshot } = require('../services/invoiceTax')
+const { logSafeError } = require('../utils/errorLogging')
+const { valueIssue } = require('../services/inventoryAccounting')
 
 const router = express.Router()
 const ORDER_STATUSES = ['draft', 'confirmed', 'partially_fulfilled', 'fulfilled', 'cancelled']
@@ -16,6 +19,12 @@ function httpError(statusCode, message) {
   const error = new Error(message)
   error.statusCode = statusCode
   return error
+}
+
+function requireKesCurrency(body) {
+  if (body && typeof body === 'object' && body.currency != null && body.currency !== 'KES') {
+    throw httpError(400, 'Sales orders are KES-only; currency conversion is not supported')
+  }
 }
 
 async function withTransaction(work) {
@@ -42,7 +51,7 @@ async function withTransaction(work) {
         transactionOpen = false
       } catch (rollbackError) {
         releaseError = rollbackError
-        console.error('Failed to roll back sales order transaction', rollbackError)
+        logSafeError('Failed to roll back sales order transaction', rollbackError)
       }
     }
     throw error
@@ -135,11 +144,20 @@ async function orderDetails(client, tenantId, orderId) {
      FROM invoices WHERE tenant_id = $1 AND sales_order_id = $2`,
     [tenantId, orderId]
   )
+  const taxSnapshotResult = await client.query(
+    `SELECT tax_profile_id, profile_version, profile_name, tax_rate,
+            calculation_method, rounding_method, requires_tax_payable
+     FROM accounting_invoice_tax_snapshots
+     WHERE tenant_id = $1 AND source_type = 'sales_order' AND source_id = $2`,
+    [tenantId, orderId]
+  )
   return {
     ...orderResult.rows[0],
     items: itemsResult.rows,
     fulfillments,
-    invoice: invoiceResult.rows[0] || null
+    invoice: invoiceResult.rows[0] || null,
+    tax_snapshot: taxSnapshotResult.rows[0] || null,
+    tax_profile_id: taxSnapshotResult.rows[0]?.tax_profile_id || null
   }
 }
 
@@ -151,7 +169,7 @@ function validateOrderId(id, res) {
 
 function sendError(res, error, fallback) {
   if (error.statusCode) return res.status(error.statusCode).json({ error: error.message })
-  console.error(error)
+  logSafeError(fallback, error)
   return res.status(500).json({ error: fallback })
 }
 
@@ -179,25 +197,23 @@ router.get('/', auth, async (req, res) => {
     )
     res.json(result.rows)
   } catch (error) {
-    console.error(error)
+    logSafeError('Failed to fetch sales orders', error)
     res.status(500).json({ error: 'Failed to fetch sales orders' })
   }
 })
 
 router.post('/', auth, async (req, res) => {
-  let order
   try {
-    order = normalizeOrder(req.body)
-  } catch (error) {
-    return res.status(error.statusCode || 400).json({ error: error.message })
-  }
-  try {
+    requireKesCurrency(req.body)
     const created = await withTransaction(async (client) => {
       const tenantResult = await client.query(
         `SELECT id FROM tenants WHERE id = $1 FOR UPDATE`,
         [req.user.tenantId]
       )
       if (tenantResult.rowCount !== 1) throw httpError(404, 'Sales order context not found')
+      const profile = await loadTaxProfile(client, req.user.tenantId,
+        req.body && req.body.tax_profile_id, null)
+      const order = normalizeOrder(req.body, profile)
       await requireClient(client, req.user.tenantId, order.client_id)
       const products = await lockActiveProducts(client, req.user.tenantId, order.items)
       const numberResult = await client.query(
@@ -218,6 +234,14 @@ router.post('/', auth, async (req, res) => {
       )
       const orderId = inserted.rows[0].id
       await insertOrderItems(client, req.user.tenantId, orderId, order.items, products)
+      await saveTaxSnapshot(client, {
+        tenantId: req.user.tenantId,
+        sourceType: 'sales_order',
+        sourceId: orderId,
+        profile,
+        totals: order,
+        userId: req.user.userId
+      })
       return orderDetails(client, req.user.tenantId, orderId)
     })
     res.status(201).json(created)
@@ -237,13 +261,8 @@ router.get('/:id', auth, async (req, res) => {
 
 router.put('/:id', auth, async (req, res) => {
   if (!validateOrderId(req.params.id, res)) return
-  let order
   try {
-    order = normalizeOrder(req.body)
-  } catch (error) {
-    return res.status(error.statusCode || 400).json({ error: error.message })
-  }
-  try {
+    requireKesCurrency(req.body)
     const updated = await withTransaction(async (client) => {
       const currentResult = await client.query(
         `SELECT id, status FROM sales_orders WHERE id = $1 AND tenant_id = $2 FOR UPDATE`,
@@ -251,6 +270,9 @@ router.put('/:id', auth, async (req, res) => {
       )
       if (currentResult.rowCount !== 1) throw httpError(404, 'Sales order not found')
       if (currentResult.rows[0].status !== 'draft') throw httpError(409, 'Only draft sales orders can be edited')
+      const profile = await loadTaxProfile(client, req.user.tenantId,
+        req.body && req.body.tax_profile_id, null)
+      const order = normalizeOrder(req.body, profile)
       await requireClient(client, req.user.tenantId, order.client_id)
       const products = await lockActiveProducts(client, req.user.tenantId, order.items)
       await client.query(
@@ -268,6 +290,14 @@ router.put('/:id', auth, async (req, res) => {
         [req.user.tenantId, req.params.id]
       )
       await insertOrderItems(client, req.user.tenantId, req.params.id, order.items, products)
+      await saveTaxSnapshot(client, {
+        tenantId: req.user.tenantId,
+        sourceType: 'sales_order',
+        sourceId: req.params.id,
+        profile,
+        totals: order,
+        userId: req.user.userId
+      })
       return orderDetails(client, req.user.tenantId, req.params.id)
     })
     res.json(updated)
@@ -425,12 +455,19 @@ router.post('/:id/fulfillments', auth, async (req, res) => {
           `INSERT INTO stock_movements
              (tenant_id, product_id, movement_type, quantity_delta,
               quantity_before, quantity_after, reference, notes, created_by,
-              sales_order_fulfillment_item_id)
-           VALUES ($1, $2, 'adjustment', $3, $4, $5, $6, $7, $8, $9)`,
+              sales_order_fulfillment_item_id, source_type, source_id)
+           VALUES ($1, $2, 'sale', $3, $4, $5, $6, $7, $8, 'sales_fulfilment', $10)`,
           [req.user.tenantId, line.product_id, formatFixed(-quantityMilli, 3),
             product.current_stock, stockUpdate.rows[0].current_stock,
-            order.order_number, movementNotes, req.user.userId, fulfillmentItemId]
+            order.order_number, movementNotes, req.user.userId, fulfillmentItemId, fulfillmentItemId]
         )
+        await valueIssue(client, {
+          tenantId: req.user.tenantId, userId: req.user.userId,
+          productId: line.product_id, quantity: formatFixed(quantityMilli, 3),
+          entryDate: input.fulfilled_date, sourceType: 'sales_fulfilment',
+          sourceId: fulfillmentItemId, sourceReference: order.order_number,
+          fulfillmentItemId
+        })
       }
 
       const completeResult = await client.query(
@@ -488,6 +525,19 @@ router.post('/:id/invoice', auth, async (req, res) => {
       if (lineResult.rowCount === 0 || lineResult.rows.some((line) => line.quantity_fulfilled !== line.quantity_ordered)) {
         throw httpError(409, 'Only fully fulfilled sales orders can be invoiced')
       }
+      const orderTax = await client.query(
+        `SELECT * FROM accounting_invoice_tax_snapshots
+         WHERE tenant_id = $1 AND source_type = 'sales_order' AND source_id = $2
+         FOR SHARE`,
+        [req.user.tenantId, order.id]
+      )
+      if (orderTax.rowCount !== 1 ||
+          String(orderTax.rows[0].subtotal) !== String(order.subtotal) ||
+          String(orderTax.rows[0].tax_rate) !== String(order.tax_rate) ||
+          String(orderTax.rows[0].tax_amount) !== String(order.tax_amount) ||
+          String(orderTax.rows[0].total) !== String(order.total)) {
+        throw httpError(409, 'Sales order financial fields do not match its saved tax snapshot')
+      }
 
       const nextNumberResult = await client.query(
         `SELECT COALESCE(
@@ -501,8 +551,10 @@ router.post('/:id/invoice', auth, async (req, res) => {
       const invoiceNumber = `INV-${String(nextNumberResult.rows[0].next_number).padStart(4, '0')}`
       const invoiceNotes = [`Sales order ${order.order_number}`, order.notes].filter(Boolean).join('\n')
       const invoiceItems = lineResult.rows.map((line) => {
-        const discountDescription = Number(line.discount_rate) > 0
-          ? ` - discount ${Number(line.discount_rate).toFixed(2)}% (KES ${Number(line.discount_amount).toFixed(2)})`
+        const discountRate = parseFixed(String(line.discount_rate), 2, 3, 'Discount rate')
+        const discountAmount = parseFixed(String(line.discount_amount), 2, 10, 'Discount amount')
+        const discountDescription = discountRate > 0n
+          ? ` - discount ${formatFixed(discountRate, 2)}% (KES ${formatFixed(discountAmount, 2)})`
           : ''
         return {
           description: `${line.product_name} (${line.product_sku})${discountDescription}`,
@@ -514,8 +566,8 @@ router.post('/:id/invoice', auth, async (req, res) => {
       const insertedInvoice = await client.query(
         `INSERT INTO invoices
            (tenant_id, client_id, sales_order_id, invoice_number, due_date,
-            subtotal, tax_rate, tax_amount, total, notes)
-         VALUES ($1, $2, $3, $4, NULL, $5, $6, $7, $8, $9)
+            subtotal, tax_rate, tax_amount, total, notes, status)
+         VALUES ($1, $2, $3, $4, NULL, $5, $6, $7, $8, $9, 'draft')
          RETURNING *`,
         [req.user.tenantId, order.client_id, order.id, invoiceNumber,
           order.subtotal, order.tax_rate, order.tax_amount, order.total, invoiceNotes]
@@ -528,6 +580,7 @@ router.post('/:id/invoice', auth, async (req, res) => {
           [createdInvoice.id, item.description, item.quantity, item.unit_price, item.amount]
         )
       }
+      await copySalesOrderTaxSnapshot(client, req.user.tenantId, order.id, createdInvoice.id, req.user.userId)
       return { ...createdInvoice, items: invoiceItems }
     })
     res.status(201).json(invoice)
