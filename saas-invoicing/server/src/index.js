@@ -35,9 +35,19 @@ const allowedOrigins = [
   'https://invoxa-neon.vercel.app'
 ]
 
+function isAllowedVercelPreviewOrigin(origin) {
+  try {
+    const url = new URL(origin)
+    return url.protocol === 'https:' &&
+      /^invoxa-[a-z0-9]+-anthonymalax001s-projects\.vercel\.app$/.test(url.hostname)
+  } catch {
+    return false
+  }
+}
+
 app.use(cors({
   origin: function (origin, callback) {
-    if (!origin || allowedOrigins.includes(origin)) {
+    if (!origin || allowedOrigins.includes(origin) || isAllowedVercelPreviewOrigin(origin)) {
       callback(null, true)
     } else {
       const error = new Error('Not allowed by CORS')

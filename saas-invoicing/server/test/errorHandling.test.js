@@ -65,3 +65,59 @@ test('global request failures return clear client errors and log sanitized diagn
     console.error = originalConsoleError
   }
 })
+
+test('CORS allows production domains and Invoxa Vercel previews only', async () => {
+  await withServer(async (baseUrl) => {
+    const allowedOrigins = [
+      'http://localhost:5173',
+      'https://invoxa1.vercel.app',
+      'https://invoxa-neon.vercel.app',
+      'https://invoxa-6paunz0c8-anthonymalax001s-projects.vercel.app'
+    ]
+
+    const preflight = await fetch(`${baseUrl}/api/auth/login`, {
+      method: 'OPTIONS',
+      headers: {
+        Origin: allowedOrigins[3],
+        'Access-Control-Request-Method': 'POST',
+        'Access-Control-Request-Headers': 'Content-Type, Authorization',
+        Connection: 'close'
+      }
+    })
+    const allowedHeaders = preflight.headers.get('access-control-allow-headers')
+
+    assert.equal(preflight.status, 204)
+    assert.equal(preflight.headers.get('access-control-allow-origin'), allowedOrigins[3])
+    assert.equal(preflight.headers.get('access-control-allow-credentials'), 'true')
+    assert.equal(preflight.headers.get('access-control-allow-methods').includes('POST'), true)
+    assert.equal(allowedHeaders.toLowerCase().includes('content-type'), true)
+    assert.equal(allowedHeaders.toLowerCase().includes('authorization'), true)
+
+    for (const origin of allowedOrigins) {
+      const response = await fetch(`${baseUrl}/api/health`, {
+        headers: { Origin: origin, Connection: 'close' }
+      })
+
+      assert.equal(response.status, 200)
+      assert.equal(response.headers.get('access-control-allow-origin'), origin)
+      assert.equal(response.headers.get('access-control-allow-credentials'), 'true')
+    }
+
+    for (const origin of [
+      'https://other-project-6paunz0c8-anthonymalax001s-projects.vercel.app',
+      'https://example.com'
+    ]) {
+      const response = await fetch(`${baseUrl}/api/health`, {
+        headers: { Origin: origin, Connection: 'close' }
+      })
+
+      assert.equal(response.status, 500)
+      assert.equal(response.headers.get('access-control-allow-origin'), null)
+    }
+
+    const noOriginResponse = await fetch(`${baseUrl}/api/health`, {
+      headers: { Connection: 'close' }
+    })
+    assert.equal(noOriginResponse.status, 200)
+  })
+})
